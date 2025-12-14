@@ -1017,7 +1017,12 @@
     if (Array.isArray(data.capabilities)) capabilities = data.capabilities;
     if (Array.isArray(data.tools)) tools = data.tools;
     if (Array.isArray(data.toolCapabilities)) toolCapabilities = data.toolCapabilities;
-    if (Array.isArray(data.tasks)) tasks = data.tasks;
+    
+      if (Array.isArray(data.globalFilterCapabilityIds)) globalFilterCapabilityIds = data.globalFilterCapabilityIds;
+      if (typeof data.globalFilterDomainIndex === 'number') globalFilterDomainIndex = data.globalFilterDomainIndex;
+      if (typeof data.globalFilterLabel === 'string') globalFilterLabel = data.globalFilterLabel;
+      if (typeof data.globalFilterToolId === 'string') globalFilterToolId = data.globalFilterToolId;
+if (Array.isArray(data.tasks)) tasks = data.tasks;
     if (Array.isArray(data.skills)) skills = data.skills;
     if (Array.isArray(data.metrics)) metrics = data.metrics;
     if (Array.isArray(data.irPlaybooks)) irPlaybooks = data.irPlaybooks;
@@ -2296,6 +2301,33 @@
   let roadmapFilterPhase = null;
 
 
+
+
+  // Cross-view filters (set from Program Overview domains, heatmap drilldowns, etc.)
+  let globalFilterCapabilityIds = null;
+  let globalFilterDomainIndex = null;
+  let globalFilterLabel = null;
+  let globalFilterToolId = null;
+
+  function setGlobalCapabilityFilter({ capabilityIds=null, domainIndex=null, label=null, toolId=null }={}) {
+    globalFilterCapabilityIds = Array.isArray(capabilityIds) ? capabilityIds.slice() : null;
+    globalFilterDomainIndex = (typeof domainIndex === 'number') ? domainIndex : null;
+    globalFilterLabel = label || null;
+    globalFilterToolId = toolId || null;
+    saveState();
+  }
+
+  function clearGlobalCapabilityFilter() {
+    globalFilterCapabilityIds = null;
+    globalFilterDomainIndex = null;
+    globalFilterLabel = null;
+    globalFilterToolId = null;
+    // also clear roadmap-specific filters to keep behavior intuitive
+    roadmapFilterCapabilityIds = null;
+    roadmapFilterLabel = null;
+    roadmapFilterPhase = null;
+    saveState();
+  }
   // ---------- Persistence ------------------
 
   function loadState() {
@@ -2322,11 +2354,16 @@ if (Array.isArray(data.tasks)) tasks = data.tasks;
       const data = {
         capabilities,
         tools,
+        toolCapabilities,
         tasks,
         skills,
         metrics,
         irPlaybooks,
-        projects
+        projects,
+        globalFilterCapabilityIds,
+        globalFilterDomainIndex,
+        globalFilterLabel,
+        globalFilterToolId
       };
       localStorage.setItem('cisoNavigatorDataV1', JSON.stringify(data));
     } catch (e) {
@@ -3022,6 +3059,33 @@ if (Array.isArray(data.tasks)) tasks = data.tasks;
       saveState();
       renderView('overview');
     });
+    
+    // Domain / Outcome drilldowns
+    container.querySelectorAll('[data-domain-roadmap]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = Number(btn.getAttribute('data-domain-roadmap'));
+        const sec = mindmapSections[idx];
+        if (!sec) return;
+        setGlobalCapabilityFilter({ capabilityIds: sec.capabilityIds, domainIndex: idx, label: sec.title });
+        roadmapFilterCapabilityIds = sec.capabilityIds.slice();
+        roadmapFilterLabel = sec.title;
+        roadmapFilterPhase = null;
+        saveState();
+        renderView('roadmap');
+      });
+    });
+
+    container.querySelectorAll('[data-domain-heatmap]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = Number(btn.getAttribute('data-domain-heatmap'));
+        const sec = mindmapSections[idx];
+        if (!sec) return;
+        setGlobalCapabilityFilter({ capabilityIds: sec.capabilityIds, domainIndex: idx, label: sec.title });
+        saveState();
+        renderView('heatmap');
+      });
+    });
+
     container.querySelector('#go-guided')?.addEventListener('click', () => renderView('guided'));
   }
 
@@ -3125,6 +3189,16 @@ if (Array.isArray(data.tasks)) tasks = data.tasks;
                       <option value="Low">Low</option>
                     </select>
                   </div>
+
+                  <div class="form-row">
+                    <select class="select-input" name="toolId">
+                      <option value="">(Optional) Link to a tool</option>
+                      ${tools.map(t => `<option value="${t.id}">${t.name}</option>`).join('')}
+                    </select>
+                    <select class="select-input" name="toolCapabilityId">
+                      <option value="">(Optional) Link to a specific Tool × Capability mapping</option>
+                    </select>
+                  </div>
                   <div class="form-row">
                     <input class="form-input" name="owner" placeholder="Owner (optional)" />
                   </div>
@@ -3212,7 +3286,36 @@ if (Array.isArray(data.tasks)) tasks = data.tasks;
 
     const addTaskForm = container.querySelector('#add-task-form');
     if (addTaskForm) {
+      const capSel = addTaskForm.querySelector('[name="capabilityId"]');
+      const toolSel = addTaskForm.querySelector('[name="toolId"]');
+      const tcSel = addTaskForm.querySelector('[name="toolCapabilityId"]');
+
+      function refreshTcOptions() {
+        if (!tcSel) return;
+        const capId = capSel?.value || null;
+        const toolId = toolSel?.value || null;
+
+        const rows = toolCapabilities
+          .filter(tc => (!capId || tc.capabilityId === capId) && (!toolId || tc.toolId === toolId))
+          .map(tc => {
+            const tool = tools.find(t => t.id === tc.toolId);
+            const cap = capabilities.find(c => c.id === tc.capabilityId);
+            return {
+              id: tc.id,
+              label: `${tool ? tool.name : tc.toolId} × ${cap ? cap.name : tc.capabilityId} (M${tc.currentMaturity || 0}→${tc.targetMaturity || 0})`
+            };
+          });
+
+        tcSel.innerHTML = `<option value="">(Optional) Link to a specific Tool × Capability mapping</option>` +
+          rows.map(r => `<option value="${r.id}">${escapeHtml(r.label)}</option>`).join('');
+      }
+
+      capSel?.addEventListener('change', refreshTcOptions);
+      toolSel?.addEventListener('change', refreshTcOptions);
+      refreshTcOptions();
+
       addTaskForm.addEventListener('submit', e => {
+
         e.preventDefault();
         const fd = new FormData(addTaskForm);
         const title = (fd.get('title') || '').trim();
@@ -3222,6 +3325,9 @@ if (Array.isArray(data.tasks)) tasks = data.tasks;
         const impact = fd.get('impact') || 'Medium';
         const owner = (fd.get('owner') || '').trim() || 'Unassigned';
 
+        const toolId = (fd.get('toolId') || '').trim() || null;
+        const toolCapabilityId = (fd.get('toolCapabilityId') || '').trim() || null;
+
         const newTask = {
           id: 't_custom_' + Date.now(),
           title,
@@ -3230,7 +3336,9 @@ if (Array.isArray(data.tasks)) tasks = data.tasks;
           owner,
           quarter: phase,
           impact,
-          phase
+          phase,
+          toolId,
+          toolCapabilityId
         };
         tasks.push(newTask);
         saveState();
@@ -3241,8 +3349,13 @@ if (Array.isArray(data.tasks)) tasks = data.tasks;
 
   function renderCapabilities(selectedId) {
     const container = document.getElementById('view-container');
+
+    const visibleCapabilities = (Array.isArray(globalFilterCapabilityIds) && globalFilterCapabilityIds.length)
+      ? capabilities.filter(c => globalFilterCapabilityIds.includes(c.id))
+      : capabilities;
+
     const selected =
-      capabilities.find(c => c.id === selectedId) || capabilities[0];
+      visibleCapabilities.find(c => c.id === selectedId) || visibleCapabilities[0] || capabilities[0];
 
     container.innerHTML = `
       <div class="grid">
@@ -3252,10 +3365,11 @@ if (Array.isArray(data.tasks)) tasks = data.tasks;
               <div>
                 <div class="card-title">Capability Catalog</div>
                 <div class="card-subtitle">Your mind map, normalized into a structured model.</div>
+              ${globalFilterLabel ? `<div class="pill-row" style="margin-top:8px;"><span class="pill highlight">Filter: ${escapeHtml(globalFilterLabel)}</span><button type="button" class="mini-btn" id="clear-global-filter">Clear</button></div>` : ``}
               </div>
               <div class="metric-pill">
                 <span class="tag-dot"></span>
-                ${capabilities.length} capabilities
+                ${visibleCapabilities.length} capabilities
               </div>
             </div>
 
@@ -3264,7 +3378,7 @@ if (Array.isArray(data.tasks)) tasks = data.tasks;
             </div>
 
             <div class="list">
-              ${capabilities
+              ${visibleCapabilities
                 .map(
                   c => `
                     <div class="list-item capability-item" data-id="${c.id}">
@@ -3302,7 +3416,16 @@ if (Array.isArray(data.tasks)) tasks = data.tasks;
       </div>
     `;
 
-    function renderDetail(cap) {
+    
+
+    const clearBtn = container.querySelector('#clear-global-filter');
+    if (clearBtn) {
+      clearBtn.addEventListener('click', () => {
+        clearGlobalCapabilityFilter();
+        renderView('overview');
+      });
+    }
+function renderDetail(cap) {
       const panel = document.getElementById('cap-detail-panel');
       const maturityClass =
         cap.maturity >= cap.targetMaturity
@@ -4074,7 +4197,23 @@ if (Array.isArray(data.tasks)) tasks = data.tasks;
   function renderHeatmap() {
     const container = document.getElementById('view-container');
 
-    container.innerHTML = `
+    
+
+    const visibleCapabilities = (Array.isArray(globalFilterCapabilityIds) && globalFilterCapabilityIds.length)
+      ? capabilities.filter(c => globalFilterCapabilityIds.includes(c.id))
+      : capabilities;
+
+    let visibleTools = tools;
+    if (globalFilterToolId) {
+      visibleTools = tools.filter(t => t.id === globalFilterToolId);
+    } else if (Array.isArray(globalFilterCapabilityIds) && globalFilterCapabilityIds.length) {
+      // Reduce tool columns to those that have at least one mapping in the filtered capability set.
+      const capSet = new Set(globalFilterCapabilityIds);
+      const toolSet = new Set(toolCapabilities.filter(tc => capSet.has(tc.capabilityId)).map(tc => tc.toolId));
+      visibleTools = tools.filter(t => toolSet.has(t.id));
+      if (!visibleTools.length) visibleTools = tools; // fallback
+    }
+container.innerHTML = `
       <div class="grid">
         <div class="card">
           <div class="card-inner">
@@ -4082,6 +4221,7 @@ if (Array.isArray(data.tasks)) tasks = data.tasks;
               <div>
                 <div class="card-title">Tool Capability Heatmap</div>
                 <div class="card-subtitle">Cell = maturity (0–5) for Tool × Capability. Click a cell to jump to that tool.</div>
+                ${globalFilterLabel ? `<div class=\"pill-row\" style=\"margin-top:8px;\"><span class=\"pill highlight\">Filter: ${escapeHtml(globalFilterLabel)}</span><button type=\"button\" class=\"mini-btn\" id=\"clear-global-filter\">Clear</button></div>` : ``}
               </div>
             </div>
 
@@ -4094,15 +4234,15 @@ if (Array.isArray(data.tasks)) tasks = data.tasks;
                 <thead>
                   <tr>
                     <th>Capability</th>
-                    ${tools.map(t => `<th class="hm-tool-header" data-tool-id="${t.id}" title="${escapeHtml(t.vendor || '')} • ${escapeHtml(t.category || '')}
+                    ${visibleTools.map(t => `<th class="hm-tool-header" data-tool-id="${t.id}" title="${escapeHtml(t.vendor || '')} • ${escapeHtml(t.category || '')}
 Click to open tool">${escapeHtml(t.name)}</th>`).join('')}
                   </tr>
                 </thead>
                 <tbody>
-                  ${capabilities.map(cap => `
+                  ${visibleCapabilities.map(cap => `
                     <tr>
                       <td class="hm-cap-row" data-cap-id="${cap.id}" title="Click to open capability">${escapeHtml(cap.name)}</td>
-                      ${tools.map(tool => {
+                      ${visibleTools.map(tool => {
                         const row = tcKey(tool.id, cap.id);
                         const lvl = row ? Number(row.currentMaturity || 0) : 0;
                         const cls = row ? hmClass(lvl) : 'hm0';
@@ -4112,7 +4252,16 @@ Maturity ${lvl}/5 (Target ${row.targetMaturity ?? 3})` : `
 Not mapped yet`);
                         return `<td class="${cls} hm-cell" data-tool-id="${tool.id}" data-cap-id="${cap.id}" title="${escapeHtml(title)}">${label}</td>`;
 
-    // Drilldowns: headers + cells
+    
+
+    const clearBtn = container.querySelector('#clear-global-filter');
+    if (clearBtn) {
+      clearBtn.addEventListener('click', () => {
+        clearGlobalCapabilityFilter();
+        renderView('overview');
+      });
+    }
+// Drilldowns: headers + cells
     container.querySelectorAll('.hm-tool-header').forEach(th => {
       th.addEventListener('click', () => {
         renderView('tools', th.getAttribute('data-tool-id'));
@@ -4197,12 +4346,95 @@ Not mapped yet`);
     container.querySelectorAll('.hm-cell').forEach(td => {
       td.addEventListener('click', () => {
         const toolId = td.dataset.toolId;
-        renderView('tools', toolId);
-        // scroll to tool panel
-        setTimeout(() => {
-          const el = document.querySelector(`[data-tool-id="${toolId}"]`);
-          el?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
-        }, 50);
+        const capabilityId = td.dataset.capId;
+        const tool = tools.find(t => t.id === toolId);
+        const cap = capabilities.find(c => c.id === capabilityId);
+        const row = tcKey(toolId, capabilityId);
+
+        const relatedTasks = tasks.filter(t =>
+          t.capabilityId === capabilityId &&
+          (!toolId || t.toolId === toolId || (row && t.toolCapabilityId === row.id))
+        );
+
+        const relatedProjects = projects.filter(p => p.capabilityId === capabilityId);
+
+        openModal({
+          title: `${tool ? tool.name : toolId} × ${cap ? cap.name : capabilityId}`,
+          subtitle: row
+            ? `Maturity ${Number(row.currentMaturity||0)}/5 → Target ${Number(row.targetMaturity||0)}`
+            : `Not mapped yet (you can map and score this pairing).`,
+          bodyHtml: `
+            <div class="grid" style="grid-template-columns: 1fr; gap:12px;">
+              <div class="detail-panel">
+                <div class="detail-title">Related work</div>
+                <div class="detail-body">
+                  <div class="section-note">Tasks linked to this capability${tool ? ' and tool' : ''}.</div>
+                  ${relatedTasks.length ? `
+                    <div class="list">
+                      ${relatedTasks.slice(0,6).map(t => `
+                        <div class="list-item">
+                          <div><strong>${escapeHtml(t.title)}</strong></div>
+                          <div class="section-note">${escapeHtml(t.status)} · ${escapeHtml(t.phase)} · ${escapeHtml(t.impact||'')}</div>
+                        </div>
+                      `).join('')}
+                    </div>` : `<div class="section-note">No tasks linked yet.</div>`}
+                  ${relatedTasks.length > 6 ? `<div class="section-note">Showing 6 of ${relatedTasks.length}.</div>` : ``}
+                  <div style="height:10px"></div>
+                  <div class="section-note">Projects for this capability.</div>
+                  ${relatedProjects.length ? `
+                    <div class="list">
+                      ${relatedProjects.slice(0,4).map(p => `
+                        <div class="list-item">
+                          <div><strong>${escapeHtml(p.title)}</strong></div>
+                          <div class="section-note">${escapeHtml(getProjectStatus(p))}</div>
+                        </div>
+                      `).join('')}
+                    </div>` : `<div class="section-note">No projects linked yet.</div>`}
+                </div>
+              </div>
+            </div>
+          `,
+          actions: [
+            {
+              label: 'Open capability',
+              className: 'mini-btn',
+              onClick: () => { closeModal(); renderView('capabilities', capabilityId); }
+            },
+            {
+              label: 'Open tool',
+              className: 'mini-btn',
+              onClick: () => { closeModal(); renderView('tools', toolId); }
+            },
+            {
+              label: 'Create uplift task',
+              className: 'primary-btn',
+              onClick: () => {
+                const newTask = {
+                  id: 't_custom_' + Date.now(),
+                  title: `Uplift ${cap ? cap.name : capabilityId} using ${tool ? tool.name : toolId}`,
+                  capabilityId,
+                  status: 'Not Started',
+                  owner: 'Unassigned',
+                  quarter: 'Foundation',
+                  impact: 'Medium',
+                  phase: 'Foundation',
+                  toolId: toolId || null,
+                  toolCapabilityId: row ? row.id : null
+                };
+                tasks.push(newTask);
+                // set cross-view filter for convenience
+                setGlobalCapabilityFilter({ capabilityIds: [capabilityId], label: cap ? cap.name : capabilityId, toolId: toolId || null });
+                roadmapFilterCapabilityIds = [capabilityId];
+                roadmapFilterLabel = cap ? cap.name : capabilityId;
+                roadmapFilterPhase = null;
+                saveState();
+                closeModal();
+                renderView('roadmap');
+              }
+            }
+          ],
+          onClose: () => {}
+        });
       });
     });
   }
@@ -4725,141 +4957,7 @@ Not mapped yet`);
 
 
   
-  function renderHeatmap() {
-    const container = document.getElementById('view-container');
-
-    container.innerHTML = `
-      <div class="grid">
-        <div class="card">
-          <div class="card-inner">
-            <div class="card-header">
-              <div>
-                <div class="card-title">Tool Capability Heatmap</div>
-                <div class="card-subtitle">Cell = maturity (0–5) for Tool × Capability. Click a cell to jump to that tool.</div>
-              </div>
-            </div>
-
-            <div class="section-note">
-              Missing cells mean the capability hasn’t been mapped to that tool yet. Map it in <strong>Tools & Platforms</strong>.
-            </div>
-
-            <div class="heatmap-wrapper">
-              <table class="heatmap">
-                <thead>
-                  <tr>
-                    <th>Capability</th>
-                    ${tools.map(t => `<th class="hm-tool-header" data-tool-id="${t.id}" title="${escapeHtml(t.vendor || '')} • ${escapeHtml(t.category || '')}
-Click to open tool">${escapeHtml(t.name)}</th>`).join('')}
-                  </tr>
-                </thead>
-                <tbody>
-                  ${capabilities.map(cap => `
-                    <tr>
-                      <td class="hm-cap-row" data-cap-id="${cap.id}" title="Click to open capability">${escapeHtml(cap.name)}</td>
-                      ${tools.map(tool => {
-                        const row = tcKey(tool.id, cap.id);
-                        const lvl = row ? Number(row.currentMaturity || 0) : 0;
-                        const cls = row ? hmClass(lvl) : 'hm0';
-                        const label = row ? `L${lvl}` : '';
-                        const title = `${tool.name} × ${cap.name}` + (row ? `
-Maturity ${lvl}/5 (Target ${row.targetMaturity ?? 3})` : `
-Not mapped yet`);
-                        return `<td class="${cls} hm-cell" data-tool-id="${tool.id}" data-cap-id="${cap.id}" title="${escapeHtml(title)}">${label}</td>`;
-
-    // Drilldowns: headers + cells
-    container.querySelectorAll('.hm-tool-header').forEach(th => {
-      th.addEventListener('click', () => {
-        renderView('tools', th.getAttribute('data-tool-id'));
-      });
-    });
-
-    container.querySelectorAll('.hm-cap-row').forEach(td => {
-      td.addEventListener('click', () => {
-        renderView('capabilities', td.getAttribute('data-cap-id'));
-      });
-    });
-
-    container.querySelectorAll('.hm-cell').forEach(td => {
-      td.addEventListener('click', () => {
-        const toolId = td.getAttribute('data-tool-id');
-        const capId = td.getAttribute('data-cap-id');
-        if (!toolId || !capId) return;
-
-        // If not mapped yet, create mapping and offer uplift task.
-        const row = tcKey(toolId, capId);
-        if (!row) {
-          ensureToolCapability(toolId, capId);
-          saveState();
-        }
-
-        openToolCapabilityModal(toolId, capId);
-      });
-    });
-                      }).join('')}
-                    </tr>
-                  `).join('')}
-                </tbody>
-              </table>
-            </div>
-
-            <div class="section-note" style="margin-top:10px;">
-              Tip: use this to find under-used capabilities before buying anything new.
-            </div>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card-inner">
-            <div class="card-header">
-              <div>
-                <div class="card-title">Legend</div>
-                <div class="card-subtitle">0–5 maturity scale.</div>
-              </div>
-            </div>
-
-            <div class="detail-panel">
-              <div class="detail-title">Meaning</div>
-              <div class="detail-body">
-                <ul style="margin:6px 0 0 18px; padding:0; font-size:0.86rem;">
-                  <li><span class="badge hm0" style="border:none;">&nbsp;&nbsp;&nbsp;</span> 0 – unused/disabled</li>
-                  <li><span class="badge hm1" style="border:none;">&nbsp;&nbsp;&nbsp;</span> 1 – basic/ad-hoc</li>
-                  <li><span class="badge hm2" style="border:none;">&nbsp;&nbsp;&nbsp;</span> 2 – repeatable but informal</li>
-                  <li><span class="badge hm3" style="border:none;">&nbsp;&nbsp;&nbsp;</span> 3 – defined & documented</li>
-                  <li><span class="badge hm4" style="border:none;">&nbsp;&nbsp;&nbsp;</span> 4 – measured & managed</li>
-                  <li><span class="badge hm5" style="border:none;">&nbsp;&nbsp;&nbsp;</span> 5 – optimized</li>
-                </ul>
-              </div>
-
-              <div style="margin-top:10px;">
-                <div class="section-title">What to do next</div>
-                <div class="detail-body">
-                  <ul style="margin:6px 0 0 18px; padding:0; font-size:0.86rem;">
-                    <li>Pick a critical capability with mostly low cells.</li>
-                    <li>Choose one platform to uplift by +1 maturity this quarter.</li>
-                    <li>Create 1–3 tasks and tie them to a project.</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-
-          </div>
-        </div>
-
-      </div>
-    `;
-
-    container.querySelectorAll('.hm-cell').forEach(td => {
-      td.addEventListener('click', () => {
-        const toolId = td.dataset.toolId;
-        renderView('tools', toolId);
-        // scroll to tool panel
-        setTimeout(() => {
-          const el = document.querySelector(`[data-tool-id="${toolId}"]`);
-          el?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
-        }, 50);
-      });
-    });
-  }
+  
 
 
   function renderSkills() {
