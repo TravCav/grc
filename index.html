@@ -622,6 +622,53 @@
       .main { padding: 14px; }
       .grid, .split { grid-template-columns: 1fr; }
     }
+  
+    /* Modal */
+    .modal-overlay{
+      position:fixed;inset:0;background:rgba(2,6,23,.72);
+      display:none;align-items:center;justify-content:center;z-index:9999;
+      padding:16px;
+    }
+    .modal-overlay.show{display:flex}
+    .modal{
+      width:min(720px, 96vw);
+      background:radial-gradient(circle at top left,#111827 0,#020617 60%);
+      border:1px solid rgba(56,189,248,.45);
+      border-radius:var(--radius-lg);
+      box-shadow:0 28px 70px rgba(0,0,0,.65);
+      overflow:hidden;
+    }
+    .modal-header{
+      padding:12px 14px;border-bottom:1px solid rgba(148,163,184,.18);
+      display:flex;align-items:flex-start;justify-content:space-between;gap:10px;
+    }
+    .modal-title{font-size:1.05rem;font-weight:650}
+    .modal-subtitle{font-size:.8rem;color:var(--muted);margin-top:2px}
+    .modal-close{
+      border:none;background:transparent;color:var(--muted);
+      font-size:1.2rem;cursor:pointer;line-height:1;padding:4px 8px;border-radius:10px;
+    }
+    .modal-close:hover{background:rgba(15,23,42,.9);color:var(--text)}
+    .modal-body{padding:12px 14px}
+    .modal-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+    .modal-grid.full{grid-template-columns:1fr}
+    .field{display:flex;flex-direction:column;gap:6px}
+    .field label{font-size:.72rem;text-transform:uppercase;letter-spacing:.14em;color:var(--muted)}
+    .field small{color:var(--muted);font-size:.78rem}
+    .modal-actions{
+      padding:12px 14px;border-top:1px solid rgba(148,163,184,.18);
+      display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;
+    }
+    .btn{
+      border-radius:999px;padding:7px 14px;border:1px solid rgba(148,163,184,.35);
+      background:rgba(15,23,42,.92);color:var(--text);font-size:.85rem;cursor:pointer;
+    }
+    .btn:hover{border-color:rgba(56,189,248,.7)}
+    .btn.primary{
+      border:none;background:linear-gradient(to right,#0ea5e9,#6366f1);
+    }
+    .btn.danger{border-color:rgba(248,113,113,.55);color:#fecaca}
+
   </style>
 </head>
 <body>
@@ -732,6 +779,12 @@
         Small Team Mode
       </div>
       <div>Opinionated steps to build & mature your infosec program.</div>
+      <div style="margin-top:10px; display:flex; flex-wrap:wrap; gap:6px;">
+        <button class="mini-btn" id="export-json-btn" type="button">Export JSON</button>
+        <button class="mini-btn" id="import-json-btn" type="button">Import JSON</button>
+        <button class="mini-btn" id="reset-data-btn" type="button" style="border-color:rgba(252,165,165,.55);">Reset</button>
+      </div>
+      <div style="margin-top:6px; font-size:.72rem; color:var(--muted);">Local only · share state via JSON</div>
     </div>
   </aside>
 
@@ -759,6 +812,397 @@
 </div>
 
 <script>
+
+  // ---------- Utilities ------------------
+  function escapeHtml(value) {
+    const str = String(value ?? '');
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  // ===== Tool × Capability helpers (0–5 maturity) =====
+  function tcKey(toolId, capabilityId) {
+    return (toolCapabilities || []).find(tc => tc.toolId === toolId && tc.capabilityId === capabilityId);
+  }
+
+  function hmClass(level) {
+    const n = Math.max(0, Math.min(5, parseInt(level ?? 0, 10) || 0));
+    return 'hm' + n;
+  }
+
+
+  // ===== Modal System =========================================
+  const modalOverlayEl = document.getElementById('modal-overlay');
+  const modalTitleEl = document.getElementById('modal-title');
+  const modalSubtitleEl = document.getElementById('modal-subtitle');
+  const modalBodyEl = document.getElementById('modal-body');
+  const modalActionsEl = document.getElementById('modal-actions');
+  const modalCloseEl = document.getElementById('modal-close');
+
+  let _modalOnClose = null;
+
+  function closeModal() {
+    if (!modalOverlayEl) return;
+    modalOverlayEl.classList.remove('show');
+    document.body.style.overflow = '';
+    modalTitleEl.textContent = 'Edit';
+    modalSubtitleEl.textContent = '';
+    modalBodyEl.innerHTML = '';
+    modalActionsEl.innerHTML = '';
+    const cb = _modalOnClose;
+    _modalOnClose = null;
+    if (typeof cb === 'function') {
+      try { cb(); } catch (e) { console.warn('modal onClose error', e); }
+    }
+  }
+
+  function openModal({ title='Edit', subtitle='', bodyHtml='', actions=[] , onClose=null }) {
+    if (!modalOverlayEl) return;
+    modalTitleEl.textContent = title || 'Edit';
+    modalSubtitleEl.textContent = subtitle || '';
+    modalBodyEl.innerHTML = bodyHtml || '';
+    modalActionsEl.innerHTML = '';
+    _modalOnClose = onClose;
+
+    (actions || []).forEach(a => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = a.className || 'mini-btn';
+      btn.textContent = a.label || 'OK';
+      btn.addEventListener('click', () => {
+        try { a.onClick && a.onClick(); } catch (e) { console.warn('modal action error', e); }
+      });
+      modalActionsEl.appendChild(btn);
+    });
+
+    modalOverlayEl.classList.add('show');
+    document.body.style.overflow = 'hidden';
+  }
+
+  // modal close wiring
+  modalCloseEl?.addEventListener('click', closeModal);
+  modalOverlayEl?.addEventListener('click', (e) => {
+    if (e.target === modalOverlayEl) closeModal();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && modalOverlayEl?.classList.contains('show')) closeModal();
+  });
+
+  // ===== Tool × Capability Uplift Templates =====================
+  function defaultUpliftStepsFor(level) {
+    // Generic steps for moving up one maturity level; users can customize per tool/capability.
+    const templates = {
+      0: ['Enable capability / data source', 'Assign owner', 'Document basic workflow'],
+      1: ['Make process repeatable', 'Add minimal documentation (SOP)', 'Identify metrics to measure'],
+      2: ['Standardize configs / playbooks', 'Integrate with upstream/downstream tools', 'Define quality checks'],
+      3: ['Measure outcomes (KPIs)', 'Tune regularly (cadence)', 'Run tabletop / validation'],
+      4: ['Automate where safe', 'Continuous improvement loop', 'Quarterly review + evidence capture']
+    };
+    return (templates[level] || ['Define next uplift step']).slice();
+  }
+
+  function ensureUpliftFields(tc) {
+    if (!tc) return;
+    if (!Array.isArray(tc.upliftSteps)) tc.upliftSteps = defaultUpliftStepsFor(tc.currentMaturity || 0).map(s => ({ text: s, done: false }));
+    if (!Array.isArray(tc.evidence)) tc.evidence = [];
+    if (!Array.isArray(tc.assessmentNotes)) tc.assessmentNotes = [];
+    if (typeof tc.assessedBy !== 'string') tc.assessedBy = '';
+  }
+
+  // ===== Import / Export =======================================
+  function exportStateToJson() {
+    const data = { version: 3, exportedAt: new Date().toISOString(), capabilities, tools, toolCapabilities, tasks, skills, metrics, irPlaybooks, projects };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'ciso-navigator-export.json';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1500);
+  }
+
+  function importStateFromJson(rawText) {
+    let data;
+    try { data = JSON.parse(rawText); } catch (e) { alert('Invalid JSON'); return; }
+    if (!data) return;
+
+    openModal({
+      title: 'Import JSON',
+      subtitle: 'Choose merge or replace.',
+      bodyHtml: `
+        <div class="detail-panel">
+          <div class="detail-title">Import options</div>
+          <div class="detail-body">
+            <div style="margin-top:8px;">Found keys: <span class="badge chip">${Object.keys(data).filter(k=>k!=='exportedAt').join(', ')}</span></div>
+            <div style="margin-top:10px; font-size:.85rem; color:var(--muted);">Merge keeps your existing items and adds new ones (by id). Replace overwrites everything.</div>
+          </div>
+        </div>
+      `,
+      actions: [
+        { label: 'Cancel', className:'mini-btn', onClick: closeModal },
+        { label: 'Merge', className:'primary-btn', onClick: () => {
+            mergeImportedData(data);
+            closeModal();
+            renderView(currentView || 'overview');
+          } },
+        { label: 'Replace', className:'mini-btn', onClick: () => {
+            replaceImportedData(data);
+            closeModal();
+            renderView('overview');
+          } }
+      ]
+    });
+  }
+
+  function mergeById(existingArr, incomingArr) {
+    const map = new Map(existingArr.map(x => [x.id, x]));
+    (incomingArr || []).forEach(it => {
+      if (!it || !it.id) return;
+      if (map.has(it.id)) {
+        map.set(it.id, { ...map.get(it.id), ...it });
+      } else {
+        map.set(it.id, it);
+      }
+    });
+    return Array.from(map.values());
+  }
+
+  function mergeImportedData(data) {
+    if (Array.isArray(data.capabilities)) capabilities = mergeById(capabilities, data.capabilities);
+    if (Array.isArray(data.tools)) tools = mergeById(tools, data.tools);
+    if (Array.isArray(data.toolCapabilities)) toolCapabilities = mergeById(toolCapabilities, data.toolCapabilities);
+    if (Array.isArray(data.tasks)) tasks = mergeById(tasks, data.tasks);
+    if (Array.isArray(data.skills)) skills = data.skills;
+    if (Array.isArray(data.metrics)) metrics = data.metrics;
+    if (Array.isArray(data.irPlaybooks)) irPlaybooks = data.irPlaybooks;
+    if (Array.isArray(data.projects)) projects = mergeById(projects, data.projects);
+    saveState();
+  }
+
+  function replaceImportedData(data) {
+    if (Array.isArray(data.capabilities)) capabilities = data.capabilities;
+    if (Array.isArray(data.tools)) tools = data.tools;
+    if (Array.isArray(data.toolCapabilities)) toolCapabilities = data.toolCapabilities;
+    if (Array.isArray(data.tasks)) tasks = data.tasks;
+    if (Array.isArray(data.skills)) skills = data.skills;
+    if (Array.isArray(data.metrics)) metrics = data.metrics;
+    if (Array.isArray(data.irPlaybooks)) irPlaybooks = data.irPlaybooks;
+    if (Array.isArray(data.projects)) projects = data.projects;
+    saveState();
+  }
+
+  function resetAllData() {
+    if (!confirm('Reset all data (clears local state)?')) return;
+    localStorage.removeItem('cisoNavigatorDataV2');
+    location.reload();
+  }
+
+  // wire sidebar buttons
+  document.getElementById('export-json-btn')?.addEventListener('click', exportStateToJson);
+  document.getElementById('import-json-btn')?.addEventListener('click', () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'application/json';
+    input.addEventListener('change', async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      const text = await file.text();
+      importStateFromJson(text);
+    });
+    input.click();
+  });
+  document.getElementById('reset-data-btn')?.addEventListener('click', resetAllData);
+
+  // ===== Overlap / Consolidation Insights =======================
+  function computeOverlapInsights() {
+    const capToTools = new Map();
+    toolCapabilities.forEach(tc => {
+      if (!tc.capabilityId || !tc.toolId) return;
+      if (!capToTools.has(tc.capabilityId)) capToTools.set(tc.capabilityId, []);
+      capToTools.get(tc.capabilityId).push(tc);
+    });
+
+    const overlaps = [];
+    const missing = [];
+
+    capabilities.forEach(cap => {
+      const rows = capToTools.get(cap.id) || [];
+      if (rows.length === 0) {
+        missing.push({ cap });
+        return;
+      }
+      if (rows.length >= 2) {
+        const avg = rows.reduce((s,r)=>s+(r.currentMaturity||0),0)/rows.length;
+        overlaps.push({ cap, rows, avg });
+      }
+    });
+
+    const weakOverlaps = overlaps.filter(o => o.avg <= 1.2);
+    return { overlaps, weakOverlaps, missing };
+  }
+
+  // ===== Heatmap Drilldown Modal ================================
+  function openToolCapabilityModal(toolId, capabilityId) {
+    const tool = tools.find(t=>t.id===toolId);
+    const cap = capabilities.find(c=>c.id===capabilityId);
+    const tc = ensureToolCapability(toolId, capabilityId);
+    ensureUpliftFields(tc);
+
+    const stepsHtml = (tc.upliftSteps||[]).map((s,i)=>`
+      <label style="display:flex; gap:8px; align-items:flex-start; margin:6px 0;">
+        <input type="checkbox" data-step-index="${i}" ${s.done?'checked':''} />
+        <span>${escapeHtml(s.text)}</span>
+      </label>
+    `).join('');
+
+    openModal({
+      title: 'Tool × Capability',
+      subtitle: `${tool?.name || toolId} → ${cap?.name || capabilityId}`,
+      bodyHtml: `
+        <div class="detail-panel">
+          <div class="detail-title">Maturity</div>
+          <div class="form-row">
+            <select class="select-input" id="tc-current">
+              ${[0,1,2,3,4,5].map(n=>`<option value="${n}" ${n===(tc.currentMaturity||0)?'selected':''}>${n}</option>`).join('')}
+            </select>
+            <select class="select-input" id="tc-target">
+              ${[0,1,2,3,4,5].map(n=>`<option value="${n}" ${n===(tc.targetMaturity??3)?'selected':''}>Target ${n}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-row">
+            <input class="form-input" id="tc-assessedby" placeholder="Assessed by" value="${escapeHtml(tc.assessedBy||'')}" />
+            <input class="form-input" id="tc-reviewed" placeholder="Last reviewed" value="${escapeHtml(tc.lastReviewed||'')}" />
+          </div>
+          <div class="section-note">Notes</div>
+          <textarea class="textarea-input" id="tc-notes" rows="3" placeholder="Notes...">${escapeHtml(tc.notes||'')}</textarea>
+        </div>
+
+        <div class="detail-panel" style="margin-top:10px;">
+          <div class="detail-title">Uplift plan</div>
+          <div class="section-note">Checklist to move this capability up one level.</div>
+          <div id="tc-steps">
+            ${stepsHtml || '<div class="section-note">No steps yet.</div>'}
+          </div>
+          <div class="form-row" style="margin-top:8px;">
+            <input class="form-input" id="tc-newstep" placeholder="Add a step..." />
+            <button class="mini-btn" type="button" id="tc-addstep">Add</button>
+          </div>
+        </div>
+
+        <div class="detail-panel" style="margin-top:10px;">
+          <div class="detail-title">Evidence</div>
+          <div class="section-note">One per line (links, detection IDs, SOP names, tabletop date, etc.).</div>
+          <textarea class="textarea-input" id="tc-evidence" rows="3" placeholder="Evidence...">${escapeHtml((tc.evidence||[]).join('\n'))}</textarea>
+        </div>
+
+        <div class="detail-panel" style="margin-top:10px;">
+          <div class="detail-title">Assessment note</div>
+          <div class="section-note">Add a short note when you change maturity (why / what changed).</div>
+          <textarea class="textarea-input" id="tc-assessnote" rows="2" placeholder="e.g., Onboarded VPN logs + added 3 detections + weekly tuning cadence"></textarea>
+        </div>
+      `,
+      actions: [
+        { label:'Close', className:'mini-btn', onClick: closeModal },
+        { label:'Create uplift task', className:'mini-btn', onClick: () => {
+            const tool = tools.find(t=>t.id===toolId);
+            const cap = capabilities.find(c=>c.id===capabilityId);
+            const title = `Uplift ${cap?.name || capabilityId} in ${tool?.name || toolId} (+1 maturity)`;
+            const newTask = {
+              id: 't_' + Date.now(),
+              title,
+              capabilityId,
+              toolId,
+              status: 'Not Started',
+              owner: 'Unassigned',
+              impact: 'High',
+              phase: 'Core',
+              quarter: 'Core'
+            };
+            tasks.unshift(newTask);
+            saveState();
+            closeModal();
+            renderView('roadmap');
+          } },
+        { label:'Save', className:'primary-btn', onClick: () => {
+            const cur = parseInt(document.getElementById('tc-current').value, 10);
+            const tgt = parseInt(document.getElementById('tc-target').value, 10);
+            tc.currentMaturity = Number.isNaN(cur)?0:cur;
+            tc.targetMaturity = Number.isNaN(tgt)?3:tgt;
+            tc.assessedBy = (document.getElementById('tc-assessedby').value || '').trim();
+            tc.lastReviewed = (document.getElementById('tc-reviewed').value || new Date().toISOString().slice(0,10)).trim();
+            tc.notes = document.getElementById('tc-notes').value || '';
+            tc.evidence = (document.getElementById('tc-evidence').value || '').split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+
+            // steps
+            const stepChecks = Array.from(document.querySelectorAll('#tc-steps input[type="checkbox"]'));
+            stepChecks.forEach(cb => {
+              const i = parseInt(cb.getAttribute('data-step-index'),10);
+              if (Number.isNaN(i)) return;
+              tc.upliftSteps[i].done = cb.checked;
+            });
+
+            // assessment note
+            const an = (document.getElementById('tc-assessnote').value || '').trim();
+            if (an) tc.assessmentNotes.unshift({ at: new Date().toISOString(), note: an, by: tc.assessedBy || '' });
+
+            saveState();
+            closeModal();
+            renderView('heatmap');
+          } }
+      ],
+      onClose: null
+    });
+
+    // step add handler
+    document.getElementById('tc-addstep')?.addEventListener('click', () => {
+      const v = (document.getElementById('tc-newstep').value || '').trim();
+      if (!v) return;
+      tc.upliftSteps.push({ text: v, done: false });
+      document.getElementById('tc-newstep').value = '';
+      // re-open (simple refresh)
+      closeModal();
+      openToolCapabilityModal(toolId, capabilityId);
+    });
+  }
+
+
+  function ensureToolCapability(toolId, capabilityId) {
+    let tc = tcKey(toolId, capabilityId);
+    if (tc) return tc;
+    tc = {
+      id: 'tc_' + toolId + '_' + capabilityId + '_' + Date.now(),
+      toolId,
+      capabilityId,
+      currentMaturity: 0,
+      targetMaturity: 3,
+      notes: '',
+      lastReviewed: new Date().toISOString().slice(0, 10)
+    };
+    toolCapabilities.push(tc);
+    if (typeof saveState === 'function') saveState();
+    return tc;
+  }
+
+  function removeToolCapabilityRow(rowId) {
+    toolCapabilities = (toolCapabilities || []).filter(tc => tc.id !== rowId);
+    if (typeof saveState === 'function') saveState();
+  }
+
+  function cycleToolCapMaturity(rowId) {
+    const tc = (toolCapabilities || []).find(x => x.id === rowId);
+    if (!tc) return;
+    tc.currentMaturity = ((tc.currentMaturity || 0) + 1) % 6; // 0–5
+    tc.lastReviewed = new Date().toISOString().slice(0, 10);
+    if (typeof saveState === 'function') saveState();
+  }
+
+
+
   // ---------- Data ------------------
 
   let capabilities = [
@@ -776,6 +1220,58 @@
       timeframe: '12 months'
     },
     {
+      id: 'assetmgmt',
+      name: 'Asset Management',
+      domain: 'Security Operations',
+      nist: ['Identify'],
+      maturity: 1,
+      description:
+        'Maintain a complete inventory of infrastructure, cloud, applications, data flows, and third-party assets to drive risk-based decisions.',
+      tags: ['Inventory', 'Exposure'],
+      owner: 'IT Ops / SecOps',
+      targetMaturity: 3,
+      timeframe: '12 months'
+    },
+    {
+      id: 'vulnmgmt',
+      name: 'Vulnerability Management',
+      domain: 'Security Operations',
+      nist: ['Identify', 'Protect'],
+      maturity: 1,
+      description:
+        'Risk-based identification, prioritization, and remediation across OS, network devices, applications, databases, and cloud.',
+      tags: ['Vulns', 'Risk-Based', 'EPSS'],
+      owner: 'SecOps Lead',
+      targetMaturity: 4,
+      timeframe: '12 months'
+    },
+    {
+      id: 'appsec',
+      name: 'Application Security',
+      domain: 'Security Operations',
+      nist: ['Identify', 'Protect'],
+      maturity: 1,
+      description:
+        'Secure development standards, code review, SAST/DAST, OSS/SBOM controls, API and supply chain security embedded in SDLC.',
+      tags: ['SDLC', 'API', 'SBOM'],
+      owner: 'AppSec Lead',
+      targetMaturity: 4,
+      timeframe: '18 months'
+    },
+    {
+      id: 'endpoint',
+      name: 'Endpoint & Network Protection',
+      domain: 'Security Operations',
+      nist: ['Protect'],
+      maturity: 2,
+      description:
+        'Harden endpoints and network with EDR, anti-malware, IDS/IPS, content filtering, DLP, DNS security, and patching.',
+      tags: ['EDR', 'DLP', 'Patching'],
+      owner: 'SecOps',
+      targetMaturity: 4,
+      timeframe: '12 months'
+    },
+    {
       id: 'soar',
       name: 'SOAR Automation',
       domain: 'Incident Response',
@@ -787,6 +1283,19 @@
       owner: 'SOC Manager',
       targetMaturity: 4,
       timeframe: '18 months'
+    },
+    {
+      id: 'incident',
+      name: 'Incident Management',
+      domain: 'Incident Response',
+      nist: ['Respond', 'Recover'],
+      maturity: 1,
+      description:
+        'Documented IR playbooks, readiness assessments, forensics partners, ransomware BIAs, exercises, and post-incident reviews.',
+      tags: ['IR', 'BC/DR', 'Forensics'],
+      owner: 'IR Lead',
+      targetMaturity: 4,
+      timeframe: '12 months'
     },
     {
       id: 'governance',
@@ -802,6 +1311,32 @@
       timeframe: '9 months'
     },
     {
+      id: 'risk',
+      name: 'Risk Management & TPRM',
+      domain: 'GRC',
+      nist: ['Identify'],
+      maturity: 1,
+      description:
+        'Ongoing risk assessments, centralized risk register, third-party risk automation, cyber risk quantification, and loss/fraud prevention.',
+      tags: ['Risk', 'TPRM', 'CRQ'],
+      owner: 'GRC Lead',
+      targetMaturity: 4,
+      timeframe: '12 months'
+    },
+    {
+      id: 'data',
+      name: 'Data Protection & Privacy',
+      domain: 'GRC',
+      nist: ['Protect', 'Detect'],
+      maturity: 1,
+      description:
+        'Data discovery, classification, access control, DLP, encryption/masking, and privacy compliance (GDPR/CCPA/HIPAA).',
+      tags: ['DLP', 'Encryption', 'Privacy'],
+      owner: 'Data Governance',
+      targetMaturity: 4,
+      timeframe: '12 months'
+    },
+    {
       id: 'cloud',
       name: 'Cloud Security Posture Management',
       domain: 'Cloud Security',
@@ -813,6 +1348,45 @@
       owner: 'Cloud Security Architect',
       targetMaturity: 4,
       timeframe: '15 months'
+    },
+    {
+      id: 'automation',
+      name: 'Automation & Analytics',
+      domain: 'Ops',
+      nist: ['Protect', 'Detect', 'Respond'],
+      maturity: 1,
+      description:
+        'Automate patching, asset inventory, threat hunting, metrics, compliance checks, and incident response playbooks.',
+      tags: ['Automation', 'SOAR', 'Metrics'],
+      owner: 'SecOps / Eng',
+      targetMaturity: 4,
+      timeframe: '18 months'
+    },
+    {
+      id: 'identity',
+      name: 'Identity & Access Management',
+      domain: 'Access',
+      nist: ['Protect'],
+      maturity: 2,
+      description:
+        'Unified identities, SSO/MFA, federation, RBAC, PAM, API secrets, password-less, and device identities tied to zero trust.',
+      tags: ['IAM', 'MFA', 'PAM'],
+      owner: 'IAM Lead',
+      targetMaturity: 4,
+      timeframe: '12 months'
+    },
+    {
+      id: 'architecture',
+      name: 'Security Architecture',
+      domain: 'Architecture',
+      nist: ['Protect', 'Detect'],
+      maturity: 2,
+      description:
+        'Defense-in-depth, segmentation/microsegmentation, zero trust, SASE/SSE, secure enclaves, and resilient networking.',
+      tags: ['Zero Trust', 'SASE', 'Segmentation'],
+      owner: 'Security Architect',
+      targetMaturity: 4,
+      timeframe: '18 months'
     },
     {
       id: 'ot',
@@ -839,6 +1413,254 @@
       owner: 'CISO / Data Governance',
       targetMaturity: 4,
       timeframe: '12 months'
+    }
+  ];
+
+  const mindmapSections = [
+    {
+      title: 'Security Operations - Threat Prevention',
+      nist: ['Identify', 'Protect'],
+      focus: 'Baseline controls to reduce attack surface.',
+      capabilityIds: ['assetmgmt', 'vulnmgmt', 'appsec', 'endpoint'],
+      items: [
+        {
+          heading: 'Asset & Vulnerability Management',
+          bullets: [
+            'Inventory infra, cloud, apps, data flows, IoT/OT; classify and prioritize with risk/EPSS.',
+            'Continuous/periodic discovery; validate fixes; measure baseline metrics.'
+          ]
+        },
+        {
+          heading: 'Application Security',
+          bullets: [
+            'Secure SDLC with standards, code review, SAST/DAST, OSS/SBOM controls, API and supply chain security.',
+            'Threat modeling and change control integrated with project delivery.'
+          ]
+        },
+        {
+          heading: 'Endpoint / Network Controls',
+          bullets: [
+            'IDS/IPS, WAF, DLP, anti-malware, anti-spam, proxy/DNS filtering, hardening, patching, DDoS protection.',
+            'Cloud misconfiguration testing, FIM, desktop security, encryption/PKI.'
+          ]
+        },
+        {
+          heading: 'Awareness & Health Checks',
+          bullets: [
+            'Awareness training, health checks, and hardened baselines for on-prem, cloud, mobile, and containers.'
+          ]
+        }
+      ]
+    },
+    {
+      title: 'Threat Detection',
+      nist: ['Detect'],
+      focus: 'Detect adversary behavior across environments.',
+      capabilityIds: ['siem'],
+      items: [
+        {
+          heading: 'Detection Engineering',
+          bullets: [
+            'SIEM log analysis/correlation, alerting, NetFlow, packet inspection, misconfiguration detection, DLP signals.',
+            'Deception tech, UEBA, anomaly detection, and integrations with cloud telemetry.'
+          ]
+        },
+        {
+          heading: 'SOC Operations',
+          bullets: [
+            'Staffing, shift/runbooks, metrics and reporting, DR exercises, MSSP integration, ISAC partnerships.',
+            'Continuous training and tech stack management.'
+          ]
+        },
+        {
+          heading: 'Threat Hunting & Intel',
+          bullets: [
+            'Hunting and insider threat, TIP integration, MITRE ATT&CK mapping, long-term trend analysis.'
+          ]
+        }
+      ]
+    },
+    {
+      title: 'Incident Management',
+      nist: ['Respond', 'Recover'],
+      focus: 'Preparedness, response, and recovery.',
+      capabilityIds: ['incident', 'soar'],
+      items: [
+        {
+          heading: 'Readiness & Playbooks',
+          bullets: [
+            'Documented playbooks, IR plan, leadership expectations, first responder training, media relations.',
+            'Forensics partner/retainer, adequate logging, simulations/tabletops.'
+          ]
+        },
+        {
+          heading: 'Ransomware & Crisis',
+          bullets: [
+            'Critical system BIA, containment strategy, offline backups, backup testing, integrity checking, crisis comms.'
+          ]
+        },
+        {
+          heading: 'Automation & Supply Chain',
+          bullets: [
+            'SOAR playbooks, machine integrity checking, supply-chain incident mgmt, post-incident analysis, cyber risk insurance.'
+          ]
+        }
+      ]
+    },
+    {
+      title: 'Identity & Access Management',
+      nist: ['Protect'],
+      focus: 'Unified identities and least privilege.',
+      capabilityIds: ['identity'],
+      items: [
+        {
+          heading: 'Identity Fabric',
+          bullets: [
+            'Credentialing, lifecycle, SSO/MFA, federation (SAML/OIDC), unified profiles, cloud/IoT device identities.',
+            'Password resets/self-service, HR integration, customer identity, SaaS IAM.'
+          ]
+        },
+        {
+          heading: 'Zero Trust & Privileged Access',
+          bullets: [
+            'RBAC/ABAC, PAM, password-less, passkeys, biometrics, voice/face signatures.',
+            'API authentication and secrets management, OAuth, secure tokens.'
+          ]
+        }
+      ]
+    },
+    {
+      title: 'Governance, Risk, Compliance',
+      nist: ['Identify', 'Protect', 'Detect'],
+      focus: 'Align security with business, privacy, and law.',
+      capabilityIds: ['governance', 'risk', 'data'],
+      items: [
+        {
+          heading: 'Strategy & Oversight',
+          bullets: [
+            'Business alignment, policies/standards, roles (RACI), board oversight, roadmap 1-3 years.',
+            'Frameworks (NIST/ISO/COBIT/FAIR/CMMC), control effectiveness, consolidation choices.'
+          ]
+        },
+        {
+          heading: 'Risk & Data',
+          bullets: [
+            'Risk assessments, pentesting, risk register, phishing/awareness, TPRM automation, CRQ.',
+            'Data ownership, discovery, classification, sharing/privacy, retention/destruction.'
+          ]
+        },
+        {
+          heading: 'Compliance & Legal',
+          bullets: [
+            'Privacy laws (GDPR/CCPA/HIPAA), PCI/SOX, SSAE18, FISMA, DORA, incident notifications, investigations/forensics.'
+          ]
+        }
+      ]
+    },
+    {
+      title: 'Security Architecture & Engineering',
+      nist: ['Protect', 'Detect'],
+      focus: 'Design for resilience and segmentation.',
+      capabilityIds: ['architecture', 'automation'],
+      items: [
+        {
+          heading: 'Architecture Patterns',
+          bullets: [
+            'Network segmentation/microsegmentation, zero trust roadmap, SASE/SSE, overlay networks, secure enclaves.',
+            'Resilient remote access, encryption, backup/replication, software-defined networking.'
+          ]
+        },
+        {
+          heading: 'Delivery Lifecycle',
+          bullets: [
+            'Embed security in requirements/design reviews, threat modeling, testing, certification/accreditation, DevSecOps.'
+          ]
+        }
+      ]
+    },
+    {
+      title: 'Cloud & SaaS',
+      nist: ['Identify', 'Protect', 'Detect'],
+      focus: 'Cloud posture, SaaS due diligence, and logging.',
+      capabilityIds: ['cloud'],
+      items: [
+        {
+          heading: 'Strategy & Posture',
+          bullets: [
+            'Multi-cloud strategy, CSPM/CNAPP, ownership/liability clarity, incident processes, DR posture.',
+            'Data ownership/compliance, vendor SLAs and financial strength.'
+          ]
+        },
+        {
+          heading: 'Integration & Controls',
+          bullets: [
+            'Identity federation/SSO, cloud log ingestion/APIs, virtualized security appliances, cloud-native app security.',
+            'Containers/serverless/service mesh security, SaaS policy and guidelines.'
+          ]
+        }
+      ]
+    },
+    {
+      title: 'Data, OT/IoT, and Emerging Tech',
+      nist: ['Identify', 'Protect', 'Detect'],
+      focus: 'Protect data everywhere, including physical and OT.',
+      capabilityIds: ['data', 'ot'],
+      items: [
+        {
+          heading: 'Data-Centric Controls',
+          bullets: [
+            'Discovery, classification, access control, DLP, masking/encryption, monitoring and alerting.'
+          ]
+        },
+        {
+          heading: 'OT / IoT',
+          bullets: [
+            'IoT frameworks, device identity/auth/integrity, OTA updates, protocol coverage, visibility and monitoring.',
+            'Use cases: smart grid, smart cities, condition-based monitoring, AR/VR, drones, edge.'
+          ]
+        }
+      ]
+    },
+    {
+      title: 'Artificial Intelligence & GenAI',
+      nist: ['Identify', 'Protect'],
+      focus: 'Safe, ethical, and secure AI adoption.',
+      capabilityIds: ['ai'],
+      items: [
+        {
+          heading: 'Governance & Safety',
+          bullets: [
+            'Policies, transparency, safe/ethical use, protecting IP and data, secure models, adversarial attack defenses.',
+            'NIST AI RMF, OWASP LLM/GenAI risks, GenAI testing tools.'
+          ]
+        },
+        {
+          heading: 'Enablement',
+          bullets: [
+            'Use of AI/GenAI for automation, detection, analytics; RAG/agents/chatbots; train security teams on AI.'
+          ]
+        }
+      ]
+    },
+    {
+      title: 'Business Enablement & Team',
+      nist: ['Identify', 'Protect'],
+      focus: 'Security as a business partner.',
+      capabilityIds: ['governance', 'risk'],
+      items: [
+        {
+          heading: 'M&A and Partnerships',
+          bullets: [
+            'Acquisition risk assessments, integration costs, IAM and tooling rationalization, network/app/cloud integration.'
+          ]
+        },
+        {
+          heading: 'People and Budget',
+          bullets: [
+            'Budgeting (CapEx/OpEx), staffing and retention, burnout prevention, training, outsourcing/consulting balance.'
+          ]
+        }
+      ]
     }
   ];
 
@@ -932,6 +1754,10 @@
       ]
     }
   ];
+
+  // Tool × Capability maturity (0–5). One row per capability per tool.
+  let toolCapabilities = [];
+
 
   let tasks = [
     {
@@ -1043,6 +1869,166 @@
       quarter: 'Optimize',
       impact: 'Medium',
       phase: 'Optimize'
+    },
+    {
+      id: 't12',
+      title: 'Build authoritative asset inventory and classify critical systems',
+      capabilityId: 'assetmgmt',
+      status: 'Not Started',
+      owner: 'SecOps / IT',
+      quarter: 'Foundation',
+      impact: 'High',
+      phase: 'Foundation'
+    },
+    {
+      id: 't13',
+      title: 'Launch risk-based vulnerability management using EPSS and SLAs',
+      capabilityId: 'vulnmgmt',
+      status: 'Not Started',
+      owner: 'SecOps Lead',
+      quarter: 'Foundation',
+      impact: 'High',
+      phase: 'Foundation'
+    },
+    {
+      id: 't14',
+      title: 'Embed secure SDLC controls (standards, SAST/DAST, SBOM, API security)',
+      capabilityId: 'appsec',
+      status: 'Not Started',
+      owner: 'AppSec Lead',
+      quarter: 'Core',
+      impact: 'High',
+      phase: 'Core'
+    },
+    {
+      id: 't15',
+      title: 'Harden endpoints and network (EDR, DLP, DNS filtering, patch automation)',
+      capabilityId: 'endpoint',
+      status: 'Not Started',
+      owner: 'SecOps',
+      quarter: 'Foundation',
+      impact: 'High',
+      phase: 'Foundation'
+    },
+    {
+      id: 't16',
+      title: 'Expand SIEM detections with UEBA, hunting, and cloud telemetry',
+      capabilityId: 'siem',
+      status: 'Not Started',
+      owner: 'Threat Detection Lead',
+      quarter: 'Core',
+      impact: 'High',
+      phase: 'Core'
+    },
+    {
+      id: 't17',
+      title: 'Standardize SOC runbooks, metrics, and DR exercises',
+      capabilityId: 'siem',
+      status: 'Not Started',
+      owner: 'SOC Manager',
+      quarter: 'Core',
+      impact: 'Medium',
+      phase: 'Core'
+    },
+    {
+      id: 't18',
+      title: 'Document IR playbooks and run ransomware tabletop',
+      capabilityId: 'incident',
+      status: 'Not Started',
+      owner: 'IR Lead',
+      quarter: 'Foundation',
+      impact: 'High',
+      phase: 'Foundation'
+    },
+    {
+      id: 't19',
+      title: 'Build SOAR playbooks for enrichment and containment',
+      capabilityId: 'soar',
+      status: 'Not Started',
+      owner: 'IR Lead',
+      quarter: 'Core',
+      impact: 'Medium',
+      phase: 'Core'
+    },
+    {
+      id: 't20',
+      title: 'Roll out data discovery, classification, and DLP monitoring',
+      capabilityId: 'data',
+      status: 'Not Started',
+      owner: 'Data Governance',
+      quarter: 'Core',
+      impact: 'High',
+      phase: 'Core'
+    },
+    {
+      id: 't21',
+      title: 'Deploy SSO/MFA across workforce apps and establish PAM for admins',
+      capabilityId: 'identity',
+      status: 'Not Started',
+      owner: 'IAM Lead',
+      quarter: 'Foundation',
+      impact: 'High',
+      phase: 'Foundation'
+    },
+    {
+      id: 't22',
+      title: 'Design zero trust segmentation and SASE/SSE rollout plan',
+      capabilityId: 'architecture',
+      status: 'Not Started',
+      owner: 'Security Architect',
+      quarter: 'Optimize',
+      impact: 'High',
+      phase: 'Optimize'
+    },
+    {
+      id: 't23',
+      title: 'Enable CSPM for multi-cloud with policy-as-code and alert routing',
+      capabilityId: 'cloud',
+      status: 'Not Started',
+      owner: 'Cloud Security Architect',
+      quarter: 'Core',
+      impact: 'High',
+      phase: 'Core'
+    },
+    {
+      id: 't24',
+      title: 'Automate patching, compliance checks, and security metrics collection',
+      capabilityId: 'automation',
+      status: 'Not Started',
+      owner: 'SecOps Engineering',
+      quarter: 'Optimize',
+      impact: 'Medium',
+      phase: 'Optimize'
+    },
+    {
+      id: 't25',
+      title: 'Pilot OT/IoT visibility and anomaly detection in one segment',
+      capabilityId: 'ot',
+      status: 'Not Started',
+      owner: 'OT Security Lead',
+      quarter: 'Foundation',
+      impact: 'Medium',
+      phase: 'Foundation'
+    },
+    {
+      id: 't26',
+      title: 'Publish AI/GenAI policy, guardrails, and testing approach',
+      capabilityId: 'ai',
+      status: 'Not Started',
+      owner: 'CISO',
+      quarter: 'Foundation',
+      impact: 'Medium',
+      phase: 'Foundation'
+    },
+    {
+      id: 't27',
+      title: 'Centralize risk register and automate third-party risk intake',
+      capabilityId: 'risk',
+      status: 'Not Started',
+      owner: 'GRC Lead',
+      quarter: 'Core',
+      impact: 'Medium',
+      phase: 'Core'
     }
   ];
 
@@ -1096,7 +2082,7 @@
       start: '2025-01-01',
       target: '2025-06-30',
       maturityImpact: 2,
-      taskIds: ['t3', 't6'],
+      taskIds: ['t3', 't6', 't16', 't17'],
       notes: 'Strengthen SIEM coverage and create end-to-end detection + IR flow.'
     },
     {
@@ -1117,9 +2103,152 @@
       owner: 'CISO',
       start: '2025-03-01',
       target: '2025-08-31',
-      maturityImpact: 1,
-      taskIds: ['t8', 't11'],
+      maturityImpact: 2,
+      taskIds: ['t8', 't11', 't26'],
       notes: 'Baseline AI/GenAI usage, define guardrails, and measure adoption.'
+    },
+    {
+      id: 'proj_asset_baseline',
+      name: 'Asset Inventory Baseline',
+      capabilityId: 'assetmgmt',
+      owner: 'SecOps / IT',
+      start: '2025-01-15',
+      target: '2025-05-31',
+      maturityImpact: 1,
+      taskIds: ['t12'],
+      notes: 'Authoritative inventory and classification for critical systems and data flows.'
+    },
+    {
+      id: 'proj_vuln_risk_based',
+      name: 'Risk-Based Vulnerability Mgmt',
+      capabilityId: 'vulnmgmt',
+      owner: 'SecOps Lead',
+      start: '2025-02-01',
+      target: '2025-06-30',
+      maturityImpact: 2,
+      taskIds: ['t13'],
+      notes: 'Prioritize remediation using risk/EPSS and enforce SLAs.'
+    },
+    {
+      id: 'proj_appsec_sdlc',
+      name: 'Secure SDLC Controls',
+      capabilityId: 'appsec',
+      owner: 'AppSec Lead',
+      start: '2025-03-01',
+      target: '2025-09-30',
+      maturityImpact: 2,
+      taskIds: ['t14'],
+      notes: 'Standards, SAST/DAST, SBOM, and API security embedded in delivery.'
+    },
+    {
+      id: 'proj_endpoint_hardening',
+      name: 'Endpoint & Network Hardening',
+      capabilityId: 'endpoint',
+      owner: 'SecOps',
+      start: '2025-01-15',
+      target: '2025-04-30',
+      maturityImpact: 1,
+      taskIds: ['t15'],
+      notes: 'EDR, DLP, DNS filtering, and patch automation rollout.'
+    },
+    {
+      id: 'proj_incident_ready',
+      name: 'Incident Readiness',
+      capabilityId: 'incident',
+      owner: 'IR Lead',
+      start: '2025-01-20',
+      target: '2025-05-31',
+      maturityImpact: 2,
+      taskIds: ['t18'],
+      notes: 'Playbooks, tabletop, and ransomware preparedness.'
+    },
+    {
+      id: 'proj_soar_playbooks',
+      name: 'SOAR Playbooks',
+      capabilityId: 'soar',
+      owner: 'IR Lead',
+      start: '2025-02-15',
+      target: '2025-07-31',
+      maturityImpact: 1,
+      taskIds: ['t19'],
+      notes: 'Automated enrichment and containment flows.'
+    },
+    {
+      id: 'proj_data_protection',
+      name: 'Data Protection & Privacy',
+      capabilityId: 'data',
+      owner: 'Data Governance',
+      start: '2025-03-15',
+      target: '2025-09-15',
+      maturityImpact: 2,
+      taskIds: ['t20'],
+      notes: 'Discovery, classification, and DLP monitoring for priority data.'
+    },
+    {
+      id: 'proj_identity_zero_trust',
+      name: 'Identity & Access Hardening',
+      capabilityId: 'identity',
+      owner: 'IAM Lead',
+      start: '2025-01-10',
+      target: '2025-06-30',
+      maturityImpact: 2,
+      taskIds: ['t21'],
+      notes: 'SSO/MFA everywhere and PAM for admins.'
+    },
+    {
+      id: 'proj_architecture_zero_trust',
+      name: 'Zero Trust Architecture',
+      capabilityId: 'architecture',
+      owner: 'Security Architect',
+      start: '2025-04-01',
+      target: '2025-12-31',
+      maturityImpact: 2,
+      taskIds: ['t22'],
+      notes: 'Segmentation and SASE/SSE roadmap with controls rollout.'
+    },
+    {
+      id: 'proj_cloud_posture',
+      name: 'Cloud Posture & CSPM',
+      capabilityId: 'cloud',
+      owner: 'Cloud Security Architect',
+      start: '2025-02-01',
+      target: '2025-07-31',
+      maturityImpact: 1,
+      taskIds: ['t23'],
+      notes: 'Multi-cloud policy-as-code and alert routing.'
+    },
+    {
+      id: 'proj_automation_metrics',
+      name: 'Automation & Analytics',
+      capabilityId: 'automation',
+      owner: 'SecOps Engineering',
+      start: '2025-06-01',
+      target: '2025-12-31',
+      maturityImpact: 1,
+      taskIds: ['t24'],
+      notes: 'Automate patching, compliance checks, and metrics.'
+    },
+    {
+      id: 'proj_ot_visibility',
+      name: 'OT / IoT Visibility Pilot',
+      capabilityId: 'ot',
+      owner: 'OT Security Lead',
+      start: '2025-05-01',
+      target: '2025-11-30',
+      maturityImpact: 1,
+      taskIds: ['t25'],
+      notes: 'Visibility and anomaly detection in a pilot segment.'
+    },
+    {
+      id: 'proj_risk_register',
+      name: 'Risk & TPRM Modernization',
+      capabilityId: 'risk',
+      owner: 'GRC Lead',
+      start: '2025-01-15',
+      target: '2025-05-31',
+      maturityImpact: 1,
+      taskIds: ['t27'],
+      notes: 'Centralized risk register and automated third-party intake.'
     }
   ];
 
@@ -1132,6 +2261,12 @@
 
   const STATUS_CYCLE = ['Not Started', 'In Progress', 'Blocked', 'Done'];
 
+  // Roadmap filtering (e.g., set from Program Overview domain cards)
+  let roadmapFilterCapabilityIds = null;
+  let roadmapFilterLabel = null;
+  let roadmapFilterPhase = null;
+
+
   // ---------- Persistence ------------------
 
   function loadState() {
@@ -1141,7 +2276,9 @@
       const data = JSON.parse(raw);
       if (Array.isArray(data.capabilities)) capabilities = data.capabilities;
       if (Array.isArray(data.tools)) tools = data.tools;
-      if (Array.isArray(data.tasks)) tasks = data.tasks;
+      
+      if (Array.isArray(data.toolCapabilities)) toolCapabilities = data.toolCapabilities;
+if (Array.isArray(data.tasks)) tasks = data.tasks;
       if (Array.isArray(data.skills)) skills = data.skills;
       if (Array.isArray(data.metrics)) metrics = data.metrics;
       if (Array.isArray(data.irPlaybooks)) irPlaybooks = data.irPlaybooks;
@@ -1249,25 +2386,47 @@
 
   // CRUD helpers
 
+  
   function editTask(taskId) {
     const task = tasks.find(t => t.id === taskId);
     if (!task) return;
-    const newTitle = prompt('Task title:', task.title);
-    if (newTitle === null) return;
-    const newOwner = prompt('Owner:', task.owner || '');
-    if (newOwner === null) return;
-    const newPhase = prompt('Phase (Foundation/Core/Optimize):', task.phase || '');
-    if (newPhase === null) return;
-    const newImpact = prompt('Impact (High/Medium/Low):', task.impact || '');
-    if (newImpact === null) return;
 
-    task.title = newTitle.trim() || task.title;
-    task.owner = newOwner.trim() || task.owner;
-    task.phase = newPhase.trim() || task.phase;
-    task.quarter = task.phase;
-    task.impact = newImpact.trim() || task.impact;
-    saveState();
+    openFormModal({
+      title: 'Edit Task',
+      subtitle: 'Update ownership, phase, and status without leaving the page.',
+      fields: [
+        { name: 'title', label: 'Title', type: 'text', required: true, full: true },
+        { name: 'capabilityId', label: 'Capability', type: 'select', options: capabilities.map(c => ({value:c.id,label:c.name})), required: true, full: true },
+        { name: 'owner', label: 'Owner', type: 'text', required: true },
+        { name: 'phase', label: 'Phase', type: 'select', options: ['Foundation','Core','Optimize'], required: true },
+        { name: 'impact', label: 'Impact', type: 'select', options: ['High','Medium','Low'], required: true },
+        { name: 'status', label: 'Status', type: 'select', options: STATUS_CYCLE, required: true },
+        { name: 'notes', label: 'Notes', type: 'textarea', rows: 3, full: true }
+      ],
+      initial: {
+        title: task.title,
+        capabilityId: task.capabilityId,
+        owner: task.owner,
+        phase: task.phase || task.quarter,
+        impact: task.impact,
+        status: task.status,
+        notes: task.notes || ''
+      },
+      onSave: (d) => {
+        task.title = String(d.title).trim();
+        task.capabilityId = d.capabilityId;
+        task.owner = String(d.owner).trim();
+        task.phase = d.phase;
+        task.quarter = d.phase;
+        task.impact = d.impact;
+        task.status = d.status;
+        task.notes = d.notes || '';
+        saveState();
+        renderView(currentView, currentSelectedId);
+      }
+    });
   }
+
 
   function deleteTask(taskId) {
     const task = tasks.find(t => t.id === taskId);
@@ -1283,25 +2442,32 @@
     saveState();
   }
 
+  
   function editTool(toolId) {
     const tool = tools.find(t => t.id === toolId);
     if (!tool) return;
-    const newName = prompt('Tool name:', tool.name);
-    if (newName === null) return;
-    const newVendor = prompt('Vendor:', tool.vendor || '');
-    if (newVendor === null) return;
-    const newCategory = prompt('Category:', tool.category || '');
-    if (newCategory === null) return;
-    const newTarget = prompt('Target level (0–3):', String(tool.targetLevel ?? 3));
-    if (newTarget === null) return;
 
-    tool.name = newName.trim() || tool.name;
-    tool.vendor = newVendor.trim() || tool.vendor;
-    tool.category = newCategory.trim() || tool.category;
-    const parsed = parseInt(newTarget, 10);
-    if (!Number.isNaN(parsed)) tool.targetLevel = parsed;
-    saveState();
+    openFormModal({
+      title: 'Edit Tool / App',
+      subtitle: 'Update inventory metadata. Capability maturity is tracked per capability below.',
+      fields: [
+        { name: 'name', label: 'Tool Name', type: 'text', required: true, full: true },
+        { name: 'vendor', label: 'Vendor', type: 'text', required: true },
+        { name: 'category', label: 'Category', type: 'text', required: true },
+        { name: 'notes', label: 'Notes', type: 'textarea', rows: 3, full: true }
+      ],
+      initial: { name: tool.name, vendor: tool.vendor || '', category: tool.category || '', notes: tool.notes || '' },
+      onSave: (d) => {
+        tool.name = String(d.name).trim();
+        tool.vendor = String(d.vendor).trim();
+        tool.category = String(d.category).trim();
+        tool.notes = d.notes || '';
+        saveState();
+        renderView(currentView, currentSelectedId);
+      }
+    });
   }
+
 
   function deleteTool(toolId) {
     const tool = tools.find(t => t.id === toolId);
@@ -1311,28 +2477,49 @@
     saveState();
   }
 
+  
   function editProject(projectId) {
-    const p = projects.find(pr => pr.id === projectId);
-    if (!p) return;
-    const newName = prompt('Project name:', p.name);
-    if (newName === null) return;
-    const newOwner = prompt('Owner:', p.owner || '');
-    if (newOwner === null) return;
-    const newStart = prompt('Start date (YYYY-MM-DD):', p.start || '');
-    if (newStart === null) return;
-    const newTarget = prompt('Target date (YYYY-MM-DD):', p.target || '');
-    if (newTarget === null) return;
-    const newImpact = prompt('Maturity impact (number):', String(p.maturityImpact ?? 1));
-    if (newImpact === null) return;
+    const project = projects.find(p => p.id === projectId);
+    if (!project) return;
 
-    p.name = newName.trim() || p.name;
-    p.owner = newOwner.trim() || p.owner;
-    p.start = newStart.trim() || p.start;
-    p.target = newTarget.trim() || p.target;
-    const parsed = parseInt(newImpact, 10);
-    if (!Number.isNaN(parsed)) p.maturityImpact = parsed;
-    saveState();
+    openFormModal({
+      title: 'Edit Project',
+      subtitle: 'Projects bundle tasks into measurable maturity moves.',
+      fields: [
+        { name: 'name', label: 'Project Name', type: 'text', required: true, full: true },
+        { name: 'capabilityId', label: 'Capability', type: 'select', options: capabilities.map(c => ({value:c.id,label:c.name})), required: true, full: true },
+        { name: 'owner', label: 'Owner', type: 'text', required: true },
+        { name: 'start', label: 'Start Date', type: 'date', required: true },
+        { name: 'target', label: 'Target Date', type: 'date', required: true },
+        { name: 'priority', label: 'Priority', type: 'select', options: ['High','Medium','Low'], required: true },
+        { name: 'maturityImpact', label: 'Maturity Impact (+)', type: 'number', min: 0, max: 5, step: 1, required: true },
+        { name: 'notes', label: 'Notes', type: 'textarea', rows: 3, full: true }
+      ],
+      initial: {
+        name: project.name,
+        capabilityId: project.capabilityId,
+        owner: project.owner,
+        start: project.start,
+        target: project.target,
+        priority: project.priority || 'Medium',
+        maturityImpact: project.maturityImpact ?? 1,
+        notes: project.notes || ''
+      },
+      onSave: (d) => {
+        project.name = String(d.name).trim();
+        project.capabilityId = d.capabilityId;
+        project.owner = String(d.owner).trim();
+        project.start = d.start;
+        project.target = d.target;
+        project.priority = d.priority;
+        project.maturityImpact = Number(d.maturityImpact ?? 1);
+        project.notes = d.notes || '';
+        saveState();
+        renderView(currentView, currentSelectedId);
+      }
+    });
   }
+
 
   function deleteProject(projectId) {
     const p = projects.find(pr => pr.id === projectId);
@@ -1368,7 +2555,7 @@
       maturity: {
         bc: 'PROGRAM ▸ MATURITY',
         title: 'Maturity Assessment',
-        sub: '0–5 scoring across all program domains.'
+        sub: '0—5 scoring across all program domains.'
       },
       projects: {
         bc: 'PROGRAM ▸ PROJECTS',
@@ -1419,19 +2606,74 @@
 
   // ---------- Views ------------------
 
+  
   function renderOverview() {
     const container = document.getElementById('view-container');
+
     const avgMaturity =
-      capabilities.reduce((acc, c) => acc + c.maturity, 0) / capabilities.length;
+      capabilities.reduce((acc, c) => acc + c.maturity, 0) / (capabilities.length || 1);
     const highImpactGaps = capabilities.filter(c => c.maturity <= 2);
     const doneTasks = tasks.filter(t => t.status === 'Done').length;
-    const avgToolLevel =
-      tools.reduce((acc, t) => acc + (t.currentLevel || 0), 0) /
-      (tools.length || 1);
+
+    const avgTc = toolCapabilities.length
+      ? toolCapabilities.reduce((s, tc) => s + (Number(tc.currentMaturity) || 0), 0) / toolCapabilities.length
+      : null;
+
     const activeProjectsCount = projects.filter(
       p => ['Active', 'Blocked'].includes(getProjectStatus(p))
     ).length;
+    const domainSummaries = mindmapSections.map(sec => {
+      const caps = sec.capabilityIds.map(id => capabilities.find(c => c.id === id)).filter(Boolean);
+      const capAvg = caps.length ? (caps.reduce((s,c)=>s+Number(c.maturity||0),0)/caps.length) : 0;
+      const capTargetAvg = caps.length ? (caps.reduce((s,c)=>s+Number(c.targetMaturity||0),0)/caps.length) : 0;
+      const secTasks = tasks.filter(t => sec.capabilityIds.includes(t.capabilityId));
+      const done = secTasks.filter(t => t.status === 'Done').length;
+      const inProg = secTasks.filter(t => t.status === 'In Progress').length;
+      const blocked = secTasks.filter(t => t.status === 'Blocked').length;
+      const pct = secTasks.length ? Math.round((done/secTasks.length)*100) : 0;
 
+      const secProjects = projects.filter(p => sec.capabilityIds.includes(p.capabilityId));
+      const toolRows = toolCapabilities.filter(tc => sec.capabilityIds.includes(tc.capabilityId));
+      const toolIds = [...new Set(toolRows.map(r=>r.toolId))];
+      const tcAvg = toolRows.length ? (toolRows.reduce((s,r)=>s+Number(r.currentMaturity||0),0)/toolRows.length) : 0;
+
+      const biggestGaps = caps
+        .map(c => ({id:c.id, name:c.name, gap: Math.max(0, Number(c.targetMaturity||0) - Number(c.maturity||0))}))
+        .sort((a,b)=>b.gap-a.gap)
+        .slice(0,3)
+        .filter(x=>x.gap>0);
+
+      return { sec, caps, capAvg, capTargetAvg, secTasks, done, inProg, blocked, pct, secProjects, toolIds, tcAvg, biggestGaps };
+    });
+
+
+
+    // NOW MODE: simple “next best actions” for small teams
+    const phaseRank = { 'Foundation': 0, 'Core': 1, 'Optimize': 2 };
+    const impactRank = { 'High': 0, 'Medium': 1, 'Low': 2 };
+    const capacityLimit = 5;
+    const inProgressCount = tasks.filter(t => t.status === 'In Progress').length;
+
+    const nextTasks = tasks
+      .filter(t => t.status === 'Not Started' || t.status === 'Blocked')
+      .sort((a, b) => {
+        const ar = (phaseRank[a.phase] ?? 9) - (phaseRank[b.phase] ?? 9);
+        if (ar !== 0) return ar;
+        const ir = (impactRank[a.impact] ?? 9) - (impactRank[b.impact] ?? 9);
+        if (ir !== 0) return ir;
+        return String(a.title).localeCompare(String(b.title));
+      })
+      .slice(0, 3);
+
+
+    // Weekly Ops: pick a focus capability (largest gap) and show 1 metric + blockers
+    const focusCapability = [...capabilities]
+      .sort((a,b)=> ((b.targetMaturity||0)-(b.maturity||0)) - ((a.targetMaturity||0)-(a.maturity||0)) )[0] || null;
+
+    const blockers = tasks.filter(t => t.status === 'Blocked').slice(0, 5);
+    const focusMetric = metrics[0] || null;
+
+    const overlap = computeOverlapInsights();
     container.innerHTML = `
       <div class="grid">
         <div class="card">
@@ -1439,12 +2681,9 @@
             <div class="card-header">
               <div>
                 <div class="card-title">Program Posture</div>
-                <div class="card-subtitle">Blended view across capabilities, tasks, tools, projects, and metrics.</div>
+                <div class="card-subtitle">Capabilities, tasks, projects, and tool capability maturity.</div>
               </div>
-              <div class="metric-pill">
-                <span class="tag-dot"></span>
-                Real-time view
-              </div>
+              <div class="metric-pill"><span class="tag-dot"></span>Real-time view</div>
             </div>
 
             <div class="split">
@@ -1466,38 +2705,27 @@
                   <div class="metric-value">${activeProjectsCount} / ${projects.length}</div>
                 </div>
                 <div class="metric-row">
-                  <div class="metric-label">Avg tool adoption level</div>
-                  <div class="metric-value">${avgToolLevel.toFixed(1)} / 3</div>
+                  <div class="metric-label">Avg tool-capability maturity</div>
+                  <div class="metric-value">${avgTc === null ? '—' : avgTc.toFixed(1) + ' / 5'}</div>
                 </div>
 
-                <div class="sparkline">
-                  <div class="sparkline-fill"></div>
-                </div>
+                <div class="sparkline"><div class="sparkline-fill"></div></div>
               </div>
+
               <div>
                 <div class="section-title">Signals</div>
                 <div class="list">
                   <div class="list-item" style="cursor:default">
-                    <div>Some core tools are deployed but under-used.</div>
-                    <div class="badge-row">
-                      <span class="badge chip">EDR</span>
-                      <span class="badge chip">SIEM</span>
-                      <span class="badge">Use guided plan to add use cases</span>
-                    </div>
+                    <div>Measure tools by capability maturity, not “installed vs not”.</div>
+                    <div class="badge-row"><span class="badge chip">Tool × Capability</span><span class="badge">0–5 maturity</span></div>
                   </div>
                   <div class="list-item" style="cursor:default">
-                    <div>AI & GenAI governance exists mostly on paper.</div>
-                    <div class="badge-row">
-                      <span class="badge chip">Emerging Tech</span>
-                      <span class="badge">Target: 4 by ${new Date().getFullYear() + 1}</span>
-                    </div>
+                    <div>Use the heatmap to find under-used capabilities before buying new tools.</div>
+                    <div class="badge-row"><span class="badge chip">Heatmap</span><span class="badge">Focus uplift</span></div>
                   </div>
                   <div class="list-item" style="cursor:default">
-                    <div>OT / ICS visibility is still early and needs sponsorship.</div>
-                    <div class="badge-row">
-                      <span class="badge chip">OT / ICS</span>
-                      <span class="badge">IR impact: High</span>
-                    </div>
+                    <div>Turn the largest gaps into 2–5 projects with owners and dates.</div>
+                    <div class="badge-row"><span class="badge chip">Projects</span><span class="badge">Executive story</span></div>
                   </div>
                 </div>
               </div>
@@ -1510,45 +2738,264 @@
           <div class="card-inner">
             <div class="card-header">
               <div>
-                <div class="card-title">Priority Domains</div>
-                <div class="card-subtitle">Top focus areas for the next 2–3 quarters.</div>
+                <div class="card-title">Now Mode</div>
+                <div class="card-subtitle">Next-best actions for a small team (based on phase + impact).</div>
+              </div>
+              <div class="metric-pill">
+                <span class="tag-dot ${inProgressCount >= capacityLimit ? 'bad' : (inProgressCount >= capacityLimit - 1 ? 'warn' : '')}"></span>
+                ${inProgressCount} in progress / ${capacityLimit} capacity
               </div>
             </div>
 
+            <div class="section-note">
+              Pick a small number of tasks and finish them. Don’t start 20 things.
+            </div>
+
             <div class="list">
-              ${highImpactGaps
-                .map(
-                  c => `
-                    <div class="list-item" data-jump="capabilities" data-capability-id="${c.id}">
-                      <div><strong>${c.name}</strong></div>
-                      <div class="section-note">Current ${c.maturity} / Target ${
-                    c.targetMaturity
-                  } · ${c.domain}</div>
-                      <div class="badge-row">
-                        <span class="badge chip">${c.nist.join(' / ')}</span>
-                        <span class="badge">Owner: ${c.owner}</span>
-                        <span class="badge">Horizon: ${c.timeframe}</span>
-                        <span class="badge">Projects: ${
-                          projects.filter(p => p.capabilityId === c.id).length
-                        }</span>
-                      </div>
+              ${nextTasks.length ? nextTasks.map(t => {
+                const cap = capabilities.find(c => c.id === t.capabilityId);
+                return `
+                  <div class="list-item" style="cursor:default">
+                    <div><strong>${escapeHtml(t.title)}</strong></div>
+                    <div class="section-note">${escapeHtml(cap?.name || t.capabilityId)} · ${escapeHtml(t.phase)} · Impact ${escapeHtml(t.impact)}</div>
+                    <div class="badge-row">
+                      <span class="badge chip task-status" data-task-id="${t.id}">
+                        <span class="tag-dot ${statusClass(t.status)}"></span>${escapeHtml(t.status)}
+                      </span>
+                      <span class="badge">Owner: ${escapeHtml(t.owner || 'Unassigned')}</span>
                     </div>
-                  `
-                )
-                .join('')}
+                    <div class="action-row">
+                      <button type="button" class="action-link task-edit" data-task-id="${t.id}">Edit</button>
+                      <button type="button" class="action-link task-start" data-task-id="${t.id}">Start</button>
+                    </div>
+                  </div>
+                `;
+              }).join('') : `<div class="section-note">No tasks available. Add tasks in Guided Plan or Roadmap.</div>`}
+            </div>
+
+            <div class="action-row" style="margin-top:10px;">
+              <button class="primary-btn" id="start-now-mode" type="button">Start all 3</button>
+              <button class="mini-btn" id="go-guided" type="button">Go to Guided Plan</button>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    
+      <div class="card">
+        <div class="card-inner">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Weekly Ops</div>
+              <div class="card-subtitle">One focus, a few tasks, and a short status update.</div>
+            </div>
+          </div>
+
+          <div class="detail-panel">
+            <div class="detail-title">Focus capability</div>
+            <div class="detail-body">
+              ${focusCapability ? `<strong>${escapeHtml(focusCapability.name)}</strong> (Gap ${Math.max(0,(focusCapability.targetMaturity||0)-(focusCapability.maturity||0))})` : 'No capability data.'}
+            </div>
+            <div class="action-row">
+              ${focusCapability ? `<button type="button" class="mini-btn" id="weekly-open-cap" data-cap-id="${focusCapability.id}">Open capability</button>` : ''}
+              <button type="button" class="mini-btn" id="weekly-copy-update">Copy weekly update</button>
+            </div>
+          </div>
+
+          <div class="detail-panel" style="margin-top:10px;">
+            <div class="detail-title">Blockers</div>
+            <div class="detail-body">
+              ${blockers.length ? blockers.map(b=>`• ${escapeHtml(b.title)} (${escapeHtml(b.owner||'')})`).join('<br/>') : 'None 🎉'}
+            </div>
+          </div>
+
+          <div class="detail-panel" style="margin-top:10px;">
+            <div class="detail-title">Metric to watch</div>
+            <div class="detail-body">
+              ${focusMetric ? `<strong>${escapeHtml(focusMetric.name)}</strong>: ${escapeHtml(focusMetric.value)} (${escapeHtml(focusMetric.trend)})` : 'No metrics configured.'}
             </div>
           </div>
         </div>
       </div>
-    `;
 
-    container.querySelectorAll('[data-jump="capabilities"]').forEach(el => {
-      el.addEventListener('click', () => {
-        const id = el.getAttribute('data-capability-id');
-        renderView('capabilities', id);
+      
+        <div class="card">
+          <div class="card-inner">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Program Overview by Domain</div>
+                <div class="card-subtitle">Use the site’s data to track real progress against guidance.</div>
+              </div>
+            </div>
+
+            <div class="section-note">
+              These domains used to be informational “guidance.” Now they show how your <strong>capabilities, tools, tasks, and projects</strong> are being used to reach the target state.
+            </div>
+
+            <div class="list">
+              ${domainSummaries.map((d, idx) => {
+                const gap = Math.max(0, d.capTargetAvg - d.capAvg);
+                const dotCls = gap === 0 ? '' : gap <= 1 ? 'warn' : 'bad';
+                const toolCount = d.toolIds.length;
+                return `
+                  <div class="list-item" style="cursor:default">
+                    <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
+                      <div>
+                        <div><strong>${escapeHtml(d.sec.title)}</strong></div>
+                        <div class="section-note">${escapeHtml(d.sec.focus)}</div>
+                        <div class="badge-row">
+                          <span class="badge chip">${escapeHtml(d.sec.nist.join(' / '))}</span>
+                          <span class="badge">Capabilities: ${d.caps.length}</span>
+                          <span class="badge">Tools mapped: ${toolCount}</span>
+                        </div>
+                      </div>
+                      <div class="metric-pill" title="Avg capability maturity vs target">
+                        <span class="tag-dot ${dotCls}"></span>${d.capAvg.toFixed(1)} → ${d.capTargetAvg.toFixed(1)}
+                      </div>
+                    </div>
+
+                    <div class="chips-row" style="margin-top:6px;">
+                      <span class="chip-pill">Work: ${d.done}/${d.secTasks.length} done (${d.pct}%)</span>
+                      <span class="chip-pill">In progress: ${d.inProg}</span>
+                      <span class="chip-pill">Blocked: ${d.blocked}</span>
+                      <span class="chip-pill">Avg tool-cap maturity: ${d.tcAvg.toFixed(1)} / 5</span>
+                      <span class="chip-pill">Projects: ${d.secProjects.length}</span>
+                    </div>
+
+                    ${d.biggestGaps.length ? `
+                      <div class="section-note" style="margin-top:6px;">Biggest gaps</div>
+                      <div class="badge-row">
+                        ${d.biggestGaps.map(g => `<span class="badge">${escapeHtml(g.name)} (gap ${g.gap})</span>`).join('')}
+                      </div>
+                    ` : `<div class="section-note" style="margin-top:6px;">No maturity gaps in this domain (at current targets).</div>`}
+
+                    <div class="action-row">
+                      <button type="button" class="mini-btn" data-domain-roadmap="${idx}">View domain work</button>
+                      <button type="button" class="mini-btn" data-domain-heatmap="${idx}">View heatmap</button>
+                      <button type="button" class="mini-btn" data-domain-capability="${idx}">Open a capability</button>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-inner">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Guidance Categories as Outcomes</div>
+                <div class="card-subtitle">Foundation → Core → Optimize coverage by domain.</div>
+              </div>
+            </div>
+
+            <div class="detail-panel">
+              ${['Foundation','Core','Optimize'].map(phase => {
+                const phaseTasks = tasks.filter(t => t.phase === phase);
+                const done = phaseTasks.filter(t => t.status === 'Done').length;
+                const pct = phaseTasks.length ? Math.round((done/phaseTasks.length)*100) : 0;
+                const inProg = phaseTasks.filter(t => t.status === 'In Progress').length;
+                const blocked = phaseTasks.filter(t => t.status === 'Blocked').length;
+                return `
+                  <div style="margin-bottom:10px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;">
+                      <div class="detail-title">${escapeHtml(phase)}</div>
+                      <div class="metric-pill"><span class="tag-dot ${blocked? 'bad': inProg? 'warn':''}"></span>${done}/${phaseTasks.length} (${pct}%)</div>
+                    </div>
+                    <div class="chips-row" style="margin-top:6px;">
+                      <span class="chip-pill">In progress: ${inProg}</span>
+                      <span class="chip-pill">Blocked: ${blocked}</span>
+                      <span class="chip-pill">Not started: ${phaseTasks.filter(t => t.status === 'Not Started').length}</span>
+                    </div>
+                    <div class="action-row">
+                      <button type="button" class="mini-btn" data-phase-roadmap="${escapeHtml(phase)}">View ${escapeHtml(phase)} tasks</button>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+              <div class="section-note">
+                Use these to drive your weekly and quarterly planning: keep Foundations moving, avoid too many “Optimize” tasks before Core is stable.
+              </div>
+            </div>
+          </div>
+        </div>
+<div class="card">
+        <div class="card-inner">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Tool Overlap & Coverage</div>
+              <div class="card-subtitle">Consolidation candidates and missing coverage.</div>
+            </div>
+          </div>
+
+          <div class="detail-panel">
+            <div class="detail-title">Missing coverage</div>
+            <div class="detail-body">
+              ${overlap.missing.length ? overlap.missing.slice(0,6).map(o=>`• ${escapeHtml(o.cap.name)}`).join('<br/>') : 'None'}
+            </div>
+          </div>
+
+          <div class="detail-panel" style="margin-top:10px;">
+            <div class="detail-title">Weak overlaps</div>
+            <div class="detail-body">
+              ${overlap.weakOverlaps.length ? overlap.weakOverlaps.slice(0,6).map(o=>{
+                const toolNames = o.rows.map(r=>tools.find(t=>t.id===r.toolId)?.name || r.toolId).join(', ');
+                return `• ${escapeHtml(o.cap.name)} (avg ${o.avg.toFixed(1)}) → ${escapeHtml(toolNames)}`;
+
+    // Weekly Ops wiring
+    container.querySelector('#weekly-open-cap')?.addEventListener('click', (e) => {
+      const id = e.currentTarget.getAttribute('data-cap-id');
+      renderView('capabilities', id);
+    });
+    container.querySelector('#weekly-copy-update')?.addEventListener('click', () => {
+      const focus = focusCapability ? focusCapability.name : '—';
+      const done = tasks.filter(t=>t.status==='Done').length;
+      const inprog = tasks.filter(t=>t.status==='In Progress').length;
+      const blocked = tasks.filter(t=>t.status==='Blocked').length;
+      const msg = [
+        `Weekly InfoSec Update`,
+        `Focus: ${focus}`,
+        `Progress: ${done} tasks done; ${inprog} in progress; ${blocked} blocked`,
+        focusMetric ? `Metric: ${focusMetric.name} = ${focusMetric.value} (${focusMetric.trend})` : ``,
+        blockers.length ? `Blockers: ${blockers.map(b=>b.title).join(' | ')}` : `Blockers: None`,
+        `Next: ${nextTasks.map(t=>t.title).join(' | ') || '—'}`
+      ].filter(Boolean).join('\n');
+      navigator.clipboard?.writeText(msg);
+      toast('Copied weekly update');
+    });
+              }).join('<br/>') : 'None'}
+            </div>
+            <div class="section-note" style="margin-top:6px;">If multiple tools overlap but all are low maturity, uplift one before buying more.</div>
+          </div>
+        </div>
+      </div>
+`;
+
+    // Now Mode actions
+    container.querySelectorAll('.task-start').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const t = tasks.find(x => x.id === btn.dataset.taskId);
+        if (!t) return;
+        t.status = 'In Progress';
+        saveState();
+        renderView('overview');
       });
     });
+    container.querySelectorAll('.task-edit').forEach(btn => {
+      btn.addEventListener('click', () => editTask(btn.dataset.taskId));
+    });
+    container.querySelector('#start-now-mode')?.addEventListener('click', () => {
+      nextTasks.forEach(t => {
+        const task = tasks.find(x => x.id === t.id);
+        if (task) task.status = 'In Progress';
+      });
+      saveState();
+      renderView('overview');
+    });
+    container.querySelector('#go-guided')?.addEventListener('click', () => renderView('guided'));
   }
+
 
   function renderGuidedPlan() {
     const container = document.getElementById('view-container');
@@ -1694,11 +3141,45 @@
             </div>
           </div>
         </div>
-      </div>
+
+        
+        <div class="card">
+          <div class="card-inner">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Guidance moved to Overview</div>
+                <div class="card-subtitle">See domain-level progress and usage on Program Overview.</div>
+              </div>
+            </div>
+            <div class="detail-panel">
+              <div class="detail-title">Why</div>
+              <div class="detail-body">
+                Domain Guidance and Guidance Categories are now used in <strong>Program Overview</strong> to show how the rest of the site (tools, tasks, projects, heatmap) is driving maturity outcomes.
+              </div>
+              <div class="action-row">
+                <button type="button" class="mini-btn" data-jump="overview">Go to Program Overview</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
     `;
 
     wireTaskStatusClickHandlers(container);
     wireTaskCrudHandlers(container);
+
+    container.querySelectorAll('[data-jump="capabilities"]').forEach(el => {
+      el.addEventListener('click', () => {
+        const id = el.getAttribute('data-capability-id');
+
+    container.querySelectorAll('[data-jump="overview"]').forEach(el => {
+      el.addEventListener('click', () => {
+        renderView('overview');
+      });
+    });
+        renderView('capabilities', id);
+      });
+    });
 
     const addTaskForm = container.querySelector('#add-task-form');
     if (addTaskForm) {
@@ -1807,7 +3288,7 @@
       const projMaturity = projectedMaturity(cap);
 
       panel.innerHTML = `
-        <div class="detail-title">${cap.name}</div>
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;"><div><div class="detail-title">${cap.name}</div><div class="detail-domain">${cap.domain}</div></div><button type="button" class="mini-btn cap-edit" data-cap-id="${cap.id}">Edit Capability</button></div>
         <div class="detail-domain">${cap.domain} · ${cap.nist.join(' / ')}</div>
         <div class="detail-body">${cap.description}</div>
 
@@ -1838,6 +3319,35 @@
             <span class="pill-stat-value">${cap.tags.join(', ')}</span>
           </div>
         </div>
+
+        ${
+          mindmapSections.filter(sec => sec.capabilityIds.includes(cap.id)).length
+            ? `
+              <div style="margin-top:10px;">
+                <div class="section-title">Guidance</div>
+                <div class="list">
+                  ${mindmapSections
+                    .filter(sec => sec.capabilityIds.includes(cap.id))
+                    .map(
+                      sec => `
+                        <div class="list-item" style="cursor:default">
+                          <div><strong>${sec.title}</strong></div>
+                          <div class="section-note">${sec.focus}</div>
+                          <ul style="margin:6px 0 0 18px; padding:0; font-size:0.84rem; color:var(--muted); line-height:1.4;">
+                            ${sec.items
+                              .flatMap(item => item.bullets)
+                              .map(b => `<li>${b}</li>`)
+                              .join('')}
+                          </ul>
+                        </div>
+                      `
+                    )
+                    .join('')}
+                </div>
+              </div>
+            `
+            : ''
+        }
 
         <div style="margin-top:10px;">
           <div class="section-title">Tools that support this capability</div>
@@ -2039,12 +3549,83 @@
             </div>
           </div>
         </div>
+
+        <div class="card">
+          <div class="card-inner">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Guidance Categories</div>
+                <div class="card-subtitle">Categories and sub-categories aligned to projects.</div>
+              </div>
+            </div>
+
+            <div class="list">
+              ${mindmapSections
+                .map(sec => {
+                  const secCaps = sec.capabilityIds
+                    .map(id => capabilities.find(c => c.id === id))
+                    .filter(Boolean);
+                  const secProjects = projects.filter(p => sec.capabilityIds.includes(p.capabilityId));
+                  const secTasks = tasks.filter(t => sec.capabilityIds.includes(t.capabilityId));
+
+                  return `
+                    <div class="list-item" style="cursor:default">
+                      <div><strong>${sec.title}</strong></div>
+                      <div class="section-note">${sec.focus}</div>
+                      <div class="badge-row">
+                        <span class="badge chip">${sec.nist.join(' / ')}</span>
+                        <span class="badge">Projects: ${secProjects.length}</span>
+                        <span class="badge">Tasks: ${secTasks.length}</span>
+                      </div>
+                      <div class="chips-row" style="margin-top:4px;">
+                        ${
+                          secCaps.length
+                            ? secCaps
+                                .map(c => {
+                                  const cls =
+                                    c.maturity >= c.targetMaturity
+                                      ? 'ok'
+                                      : c.targetMaturity - c.maturity === 1
+                                      ? 'warn'
+                                      : 'bad';
+                                  return `
+                                    <span class="chip-pill em" data-jump="capabilities" data-capability-id="${c.id}">
+                                      <span class="tag-dot ${cls}"></span>${c.name}
+                                    </span>
+                                  `;
+                                })
+                                .join('')
+                            : '<span class="chip-pill">Map a capability</span>'
+                        }
+                      </div>
+                      <ul style="margin:6px 0 0 18px; padding:0; font-size:0.84rem; color:var(--muted); line-height:1.4;">
+                        ${sec.items
+                          .map(item => `<li><strong>${item.heading}:</strong> ${item.bullets[0] || ''}</li>`)
+                          .join('')}
+                      </ul>
+                    </div>
+                  `;
+                })
+                .join('')}
+            </div>
+          </div>
+        </div>
       </div>
     `;
   }
 
   function renderRoadmap() {
     const container = document.getElementById('view-container');
+
+    let filteredTasks = Array.isArray(roadmapFilterCapabilityIds) && roadmapFilterCapabilityIds.length
+      ? tasks.filter(t => roadmapFilterCapabilityIds.includes(t.capabilityId))
+      : tasks;
+
+    if (roadmapFilterPhase) {
+      filteredTasks = filteredTasks.filter(t => t.phase === roadmapFilterPhase);
+    }
+
+
 
     container.innerHTML = `
       <div class="grid">
@@ -2054,6 +3635,11 @@
               <div>
                 <div class="card-title">Roadmap Board</div>
                 <div class="card-subtitle">Tasks grouped by status and impact.</div>
+                ${roadmapFilterLabel ? `<div class="pill-row" style="margin-top:8px;">
+                  <span class="pill highlight">Filter: ${escapeHtml(roadmapFilterLabel)}</span>
+                  <button class="mini-btn" id="roadmap-clear-filter" type="button">Clear</button>
+                </div>` : ``}
+
               </div>
             </div>
 
@@ -2061,7 +3647,7 @@
               <div>
                 <div class="section-title">High Impact</div>
                 <div class="list">
-                  ${tasks
+                  ${filteredTasks
                     .filter(t => t.impact === 'High')
                     .map(t => {
                       const capName = capabilities.find(c => c.id === t.capabilityId)?.name || '';
@@ -2091,7 +3677,7 @@
               <div>
                 <div class="section-title">Medium Impact</div>
                 <div class="list">
-                  ${tasks
+                  ${filteredTasks
                     .filter(t => t.impact === 'Medium')
                     .map(t => {
                       const capName = capabilities.find(c => c.id === t.capabilityId)?.name || '';
@@ -2167,11 +3753,13 @@
     wireTaskCrudHandlers(container);
   }
 
+  
   function renderTools() {
     const container = document.getElementById('view-container');
 
-    const underUsed = tools.filter(t => (t.currentLevel || 0) < (t.targetLevel || 3));
-    const fullyUsed = tools.filter(t => (t.currentLevel || 0) >= (t.targetLevel || 3));
+    const avgTc = toolCapabilities.length
+      ? toolCapabilities.reduce((s, tc) => s + (Number(tc.currentMaturity) || 0), 0) / toolCapabilities.length
+      : 0;
 
     container.innerHTML = `
       <div class="grid">
@@ -2179,82 +3767,98 @@
           <div class="card-inner">
             <div class="card-header">
               <div>
-                <div class="card-title">Tool Inventory</div>
-                <div class="card-subtitle">Where each tool fits and how it&apos;s used today.</div>
+                <div class="card-title">Tools & Platforms</div>
+                <div class="card-subtitle">Track what each tool can do (capabilities) and how mature each capability is (0–5).</div>
               </div>
-              <div class="metric-pill">
-                <span class="tag-dot"></span>
-                ${tools.length} tools
-              </div>
+              <div class="metric-pill"><span class="tag-dot"></span>${tools.length} tools</div>
             </div>
 
             <div class="section-note">
-              Click the adoption level pill to move a tool through: Not in use → Deployed / basic → Use-case driven → Optimized / automated.
+              A tool doesn’t have one maturity score. Each tool has multiple capabilities, and each capability can mature independently.
             </div>
 
             <div class="list">
-              ${tools
-                .map(t => {
-                  const cls = toolLevelClass(t.currentLevel || 0, t.targetLevel || 3);
-                  const mappedCaps = (t.capabilities || [])
-                    .map(id => capabilities.find(c => c.id === id)?.name || id)
-                    .join(', ');
-                  return `
-                    <div class="list-item" data-id="${t.id}">
-                      <div><strong>${t.name}</strong> — ${t.category}</div>
-                      <div class="section-note">
-                        Vendor: ${t.vendor} · Supports: ${mappedCaps || 'Not mapped'}
-                      </div>
-                      <div class="badge-row">
-                        <span class="badge chip tool-level" data-tool-id="${t.id}">
-                          <span class="tag-dot ${cls}"></span>
-                          Level ${t.currentLevel || 0} / ${t.targetLevel || 3} · ${TOOL_LEVEL_LABELS[t.currentLevel || 0]}
-                        </span>
-                        <span class="badge">${underUsed.includes(t) ? 'Under target' : 'At / above target'}</span>
-                      </div>
-                      <div class="action-row">
-                        <button type="button" class="action-link tool-edit" data-tool-id="${t.id}">Edit</button>
-                        <button type="button" class="action-link danger tool-delete" data-tool-id="${t.id}">Delete</button>
-                      </div>
+              ${tools.map(tool => {
+                const rows = toolCapabilities.filter(tc => tc.toolId === tool.id);
+                const rowsAvg = rows.length
+                  ? (rows.reduce((s, r) => s + (Number(r.currentMaturity) || 0), 0) / rows.length).toFixed(1)
+                  : '0.0';
+
+                const lastReviewed = rows.map(r => r.lastReviewed).filter(Boolean).sort().slice(-1)[0] || '—';
+
+                return `
+                  <div class="detail-panel" style="margin-top:10px; cursor:default;">
+                    <div class="detail-title">${tool.name}</div>
+                    <div class="detail-domain">${tool.vendor || 'Vendor'} · ${tool.category || 'Category'}</div>
+
+                    <div class="chips-row">
+                      <span class="chip-pill em">Avg capability maturity: ${rowsAvg} / 5</span>
+                      <span class="chip-pill">Capabilities: ${rows.length}</span>
+                      <span class="chip-pill">Last reviewed: ${lastReviewed}</span>
                     </div>
-                  `;
-                })
-                .join('')}
+
+                    ${tool.notes ? `<div class="detail-body" style="margin-top:6px;">${escapeHtml(tool.notes)}</div>` : ''}
+
+                    <div class="action-row">
+                      <button type="button" class="action-link tool-edit" data-tool-id="${tool.id}">Edit</button>
+                      <button type="button" class="action-link danger tool-delete" data-tool-id="${tool.id}">Delete</button>
+                    </div>
+
+                    <div style="margin-top:10px;">
+                      <div class="section-title">Capabilities in this tool</div>
+
+                      <div class="list">
+                        ${rows.length ? rows.map(r => {
+                          const cap = capabilities.find(c => c.id === r.capabilityId);
+                          const capName = cap ? cap.name : r.capabilityId;
+                          return `
+                            <div class="list-item" style="cursor:default">
+                              <div><strong>${capName}</strong></div>
+                              <div class="section-note">${cap ? cap.domain : ''}</div>
+
+                              <div class="badge-row">
+                                <span class="badge chip cap-maturity-pill" data-tc-id="${r.id}" title="Click to cycle 0→5">
+                                  <span class="tag-dot ${Number(r.currentMaturity) >= Number(r.targetMaturity || 3) ? '' : (Number(r.targetMaturity || 3) - Number(r.currentMaturity || 0) === 1 ? 'warn' : 'bad')}"></span>
+                                  Maturity ${Number(r.currentMaturity || 0)} / 5 · Target ${Number(r.targetMaturity || 3)}
+                                </span>
+                                <span class="badge">Reviewed: ${r.lastReviewed || '—'}</span>
+                              </div>
+
+                              <div class="section-note" style="margin-top:6px;">Notes</div>
+                              <textarea class="textarea-input tc-notes" data-tc-id="${r.id}" rows="2" placeholder="Evidence / what’s missing / next steps...">${escapeHtml(r.notes || '')}</textarea>
+
+                              <div class="action-row">
+                                <button type="button" class="action-link tc-set-target" data-tc-id="${r.id}">Set target</button>
+                                <button type="button" class="action-link danger tc-remove" data-tc-id="${r.id}">Remove</button>
+                              </div>
+                            </div>
+                          `;
+                        }).join('') : `<div class="section-note">No capabilities mapped yet. Add one below.</div>`}
+                      </div>
+
+                      <div class="detail-panel" style="margin-top:10px;">
+                        <div class="detail-title">Add capability to this tool</div>
+                        <div class="form-row">
+                          <select class="select-input tc-add-cap" data-tool-id="${tool.id}">
+                            ${capabilities.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
+                          </select>
+                          <button class="mini-btn tc-add-btn" data-tool-id="${tool.id}">Add</button>
+                        </div>
+                        <div class="section-note" style="margin-top:6px;">
+                          This creates a Tool × Capability row you can mature over time.
+                        </div>
+                      </div>
+
+                    </div>
+                  </div>
+                `;
+              }).join('')}
             </div>
 
             <div class="detail-panel" style="margin-top:12px;">
               <div class="detail-title">Add Tool</div>
               <div class="detail-body">
-                <form id="add-tool-form">
-                  <div class="form-row">
-                    <input class="form-input" name="name" placeholder="Tool name (e.g., CrowdStrike Falcon)" />
-                  </div>
-                  <div class="form-row">
-                    <input class="form-input" name="vendor" placeholder="Vendor (e.g., CrowdStrike)" />
-                    <input class="form-input" name="category" placeholder="Category (e.g., EDR / XDR)" />
-                  </div>
-                  <div class="form-row">
-                    <select class="select-input" name="targetLevel">
-                      <option value="3" selected>Target level: 3 (Optimized / automated)</option>
-                      <option value="2">Target level: 2 (Use-case driven)</option>
-                      <option value="1">Target level: 1 (Deployed / basic)</option>
-                    </select>
-                  </div>
-                  <div class="section-note" style="margin-top:6px;">Capabilities this tool supports:</div>
-                  <div class="chips-row">
-                    ${capabilities
-                      .map(
-                        cap => `
-                          <label class="chip-pill">
-                            <input type="checkbox" name="capability" value="${cap.id}" style="margin-right:4px;" />
-                            ${cap.name}
-                          </label>
-                        `
-                      )
-                      .join('')}
-                  </div>
-                  <button type="submit" class="primary-btn">Add Tool</button>
-                </form>
+                <button class="primary-btn" id="add-tool-btn" type="button">Add Tool</button>
               </div>
             </div>
 
@@ -2265,8 +3869,8 @@
           <div class="card-inner">
             <div class="card-header">
               <div>
-                <div class="card-title">Tool Landscape Summary</div>
-                <div class="card-subtitle">Where your stack is under-leveraged.</div>
+                <div class="card-title">Summary</div>
+                <div class="card-subtitle">Program-level tool capability maturity.</div>
               </div>
             </div>
 
@@ -2274,73 +3878,170 @@
               <div class="detail-title">At a glance</div>
               <div class="grid-2">
                 <div class="pill-stat">
-                  <span class="pill-stat-label">Under-used tools</span>
-                  <span class="pill-stat-value ${underUsed.length ? 'warn' : 'ok'}">${underUsed.length}</span>
+                  <span class="pill-stat-label">Mapped tool-capabilities</span>
+                  <span class="pill-stat-value">${toolCapabilities.length}</span>
                 </div>
                 <div class="pill-stat">
-                  <span class="pill-stat-label">At / above target</span>
-                  <span class="pill-stat-value ok">${fullyUsed.length}</span>
+                  <span class="pill-stat-label">Avg maturity</span>
+                  <span class="pill-stat-value ${avgTc >= 3 ? 'ok' : avgTc >= 2 ? 'warn' : 'bad'}">${avgTc.toFixed(1)} / 5</span>
                 </div>
               </div>
 
               <div style="margin-top:10px;">
-                <div class="section-title">Questions to ask</div>
+                <div class="section-title">How to use this</div>
                 <div class="detail-body">
                   <ul style="margin:6px 0 0 18px; padding:0; font-size:0.86rem;">
-                    <li>Do we have tools that overlap heavily but aren&apos;t fully used?</li>
-                    <li>Which tools matter most for our top 3 risks this year?</li>
-                    <li>Are there &quot;zombie&quot; tools we could retire and reinvest the budget?</li>
-                    <li>Are platform features (SOAR, UEBA, CSPM) turned on and tied to real workflows?</li>
+                    <li>Map 3–5 capabilities for each major platform first.</li>
+                    <li>Set maturity based on real usage (process + people + tuning), not license count.</li>
+                    <li>Pick 1–2 uplift targets per quarter and push them +1 maturity.</li>
                   </ul>
                 </div>
               </div>
-
-              <div style="margin-top:10px;">
-                <div class="section-title">Maturity theme</div>
-                <div class="detail-body">
-                  The goal is not &quot;more tools&quot;; it&apos;s <strong>fewer, better-used tools</strong> that plug into your
-                  capabilities and roadmap. Use this view to pick <em>one or two</em> platforms to lean into each quarter.
-                </div>
-              </div>
             </div>
+
           </div>
         </div>
+
       </div>
     `;
 
-    wireToolLevelClickHandlers(container);
-    wireToolCrudHandlers(container);
+    // tool edit/delete
+    container.querySelectorAll('.tool-edit').forEach(btn => {
+      btn.addEventListener('click', (e) => { e.stopPropagation(); editTool(btn.dataset.toolId); });
+    });
+    container.querySelectorAll('.tool-delete').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const tool = tools.find(t => t.id === btn.dataset.toolId);
+        if (!tool) return;
+        openModal({
+          title: 'Delete Tool',
+          subtitle: 'This also removes all Tool × Capability mappings for it.',
+          bodyHtml: `<div class="detail-panel"><div class="detail-title">${escapeHtml(tool.name)}</div><div class="detail-body">Are you sure?</div></div>`,
+          actions: [
+            { label: 'Cancel', className: 'btn', onClick: closeModal },
+            { label: 'Delete', className: 'btn danger', onClick: () => {
+                tools = tools.filter(t => t.id !== tool.id);
+                toolCapabilities = toolCapabilities.filter(tc => tc.toolId !== tool.id);
+                saveState();
+                closeModal();
+                renderView('tools');
+              }}
+          ]
+        });
+      });
+    });
 
-    const addToolForm = container.querySelector('#add-tool-form');
-    if (addToolForm) {
-      addToolForm.addEventListener('submit', e => {
+    // add tool button (modal)
+    const addBtn = container.querySelector('#add-tool-btn');
+    addBtn?.addEventListener('click', () => {
+      openFormModal({
+        title: 'Add Tool / App',
+        subtitle: 'Add a platform you already own. Map capabilities next.',
+        fields: [
+          { name: 'name', label: 'Tool Name', type: 'text', required: true, full: true },
+          { name: 'vendor', label: 'Vendor', type: 'text', required: true },
+          { name: 'category', label: 'Category', type: 'text', required: true },
+          { name: 'notes', label: 'Notes', type: 'textarea', rows: 3, full: true }
+        ],
+        initial: { name:'', vendor:'', category:'', notes:'' },
+        saveLabel: 'Add',
+        onSave: (d) => {
+          tools.push({
+            id: 'tool_custom_' + Date.now(),
+            name: String(d.name).trim(),
+            vendor: String(d.vendor).trim(),
+            category: String(d.category).trim(),
+            notes: d.notes || ''
+          });
+          saveState();
+          renderView('tools');
+        }
+      });
+    });
+
+    // Add capability to tool
+    container.querySelectorAll('.tc-add-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
         e.preventDefault();
-        const fd = new FormData(addToolForm);
-        const name = (fd.get('name') || '').trim();
-        if (!name) return;
-        const vendor = (fd.get('vendor') || 'Unknown').trim() || 'Unknown';
-        const category = (fd.get('category') || 'Other').trim() || 'Other';
-        const targetLevel = parseInt(fd.get('targetLevel') || '3', 10) || 3;
-        const caps = fd.getAll('capability');
-
-        const newTool = {
-          id: 'tool_custom_' + Date.now(),
-          name,
-          vendor,
-          category,
-          capabilities: caps,
-          currentLevel: 0,
-          targetLevel,
-          currentUse: [],
-          potentialUse: []
-        };
-        tools.push(newTool);
-        saveState();
+        const toolId = btn.dataset.toolId;
+        const sel = container.querySelector(`.tc-add-cap[data-tool-id="${toolId}"]`);
+        const capId = sel?.value;
+        if (!capId) return;
+        ensureToolCapability(toolId, capId);
         renderView('tools');
       });
-    }
+    });
+
+    // Cycle maturity
+    container.querySelectorAll('.cap-maturity-pill').forEach(pill => {
+      pill.addEventListener('click', () => {
+        cycleToolCapMaturity(pill.dataset.tcId);
+        renderView('tools');
+      });
+    });
+
+    // Notes update
+    container.querySelectorAll('.tc-notes').forEach(area => {
+      area.addEventListener('change', () => {
+        const tc = toolCapabilities.find(x => x.id === area.dataset.tcId);
+        if (!tc) return;
+        tc.notes = area.value;
+        tc.lastReviewed = new Date().toISOString().slice(0, 10);
+        saveState();
+      });
+    });
+
+    // Set target
+    container.querySelectorAll('.tc-set-target').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const tc = toolCapabilities.find(x => x.id === btn.dataset.tcId);
+        if (!tc) return;
+        openFormModal({
+          title: 'Set Target Maturity',
+          subtitle: 'Target maturity for this tool capability (0–5).',
+          fields: [
+            { name: 'targetMaturity', label: 'Target (0–5)', type: 'number', min: 0, max: 5, step: 1, required: true, full: true }
+          ],
+          initial: { targetMaturity: Number(tc.targetMaturity ?? 3) },
+          onSave: (d) => {
+            const n = Number(d.targetMaturity);
+            if (Number.isNaN(n) || n < 0 || n > 5) return;
+            tc.targetMaturity = n;
+            tc.lastReviewed = new Date().toISOString().slice(0, 10);
+            saveState();
+            renderView('tools');
+          }
+        });
+      });
+    });
+
+    // Remove mapping
+    container.querySelectorAll('.tc-remove').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const tc = toolCapabilities.find(x => x.id === btn.dataset.tcId);
+        if (!tc) return;
+        const capName = capabilities.find(c => c.id === tc.capabilityId)?.name || tc.capabilityId;
+        const toolName = tools.find(t => t.id === tc.toolId)?.name || tc.toolId;
+        openModal({
+          title: 'Remove Capability Mapping',
+          subtitle: `${toolName} → ${capName}`,
+          bodyHtml: `<div class="detail-panel"><div class="detail-body">Remove this capability from this tool?</div></div>`,
+          actions: [
+            { label: 'Cancel', className: 'btn', onClick: closeModal },
+            { label: 'Remove', className: 'btn danger', onClick: () => {
+                removeToolCapabilityRow(btn.dataset.tcId);
+                closeModal();
+                renderView('tools');
+              } }
+          ]
+        });
+      });
+    });
   }
 
+
+  
   function renderHeatmap() {
     const container = document.getElementById('view-container');
 
@@ -2350,13 +4051,13 @@
           <div class="card-inner">
             <div class="card-header">
               <div>
-                <div class="card-title">Tool × Capability Heatmap</div>
-                <div class="card-subtitle">Which tools back which capabilities, and how strongly.</div>
+                <div class="card-title">Tool Capability Heatmap</div>
+                <div class="card-subtitle">Cell = maturity (0–5) for Tool × Capability. Click a cell to jump to that tool.</div>
               </div>
             </div>
 
             <div class="section-note">
-              Colors indicate how mature the tool is in that capability, based on the adoption level you set in <strong>Tools & Platforms</strong>.
+              Missing cells mean the capability hasn’t been mapped to that tool yet. Map it in <strong>Tools & Platforms</strong>.
             </div>
 
             <div class="heatmap-wrapper">
@@ -2364,35 +4065,62 @@
                 <thead>
                   <tr>
                     <th>Capability</th>
-                    ${tools
-                      .map(
-                        t =>
-                          `<th title="${t.vendor} • ${t.category}">${t.name}</th>`
-                      )
-                      .join('')}
+                    ${tools.map(t => `<th class="hm-tool-header" data-tool-id="${t.id}" title="${escapeHtml(t.vendor || '')} • ${escapeHtml(t.category || '')}
+Click to open tool">${escapeHtml(t.name)}</th>`).join('')}
                   </tr>
                 </thead>
                 <tbody>
-                  ${capabilities
-                    .map(cap => {
-                      return `
-                        <tr>
-                          <td>${cap.name}</td>
-                          ${tools
-                            .map(tool => {
-                              const cls = heatmapCellClass(tool, cap.id);
-                              const label = (tool.capabilities || []).includes(cap.id)
-                                ? `L${tool.currentLevel || 0}`
-                                : '';
-                              return `<td class="${cls}">${label}</td>`;
-                            })
-                            .join('')}
-                        </tr>
-                      `;
-                    })
-                    .join('')}
+                  ${capabilities.map(cap => `
+                    <tr>
+                      <td class="hm-cap-row" data-cap-id="${cap.id}" title="Click to open capability">${escapeHtml(cap.name)}</td>
+                      ${tools.map(tool => {
+                        const row = tcKey(tool.id, cap.id);
+                        const lvl = row ? Number(row.currentMaturity || 0) : 0;
+                        const cls = row ? hmClass(lvl) : 'hm0';
+                        const label = row ? `L${lvl}` : '';
+                        const title = `${tool.name} × ${cap.name}` + (row ? `
+Maturity ${lvl}/5 (Target ${row.targetMaturity ?? 3})` : `
+Not mapped yet`);
+                        return `<td class="${cls} hm-cell" data-tool-id="${tool.id}" data-cap-id="${cap.id}" title="${escapeHtml(title)}">${label}</td>`;
+
+    // Drilldowns: headers + cells
+    container.querySelectorAll('.hm-tool-header').forEach(th => {
+      th.addEventListener('click', () => {
+        renderView('tools', th.getAttribute('data-tool-id'));
+      });
+    });
+
+    container.querySelectorAll('.hm-cap-row').forEach(td => {
+      td.addEventListener('click', () => {
+        renderView('capabilities', td.getAttribute('data-cap-id'));
+      });
+    });
+
+    container.querySelectorAll('.hm-cell').forEach(td => {
+      td.addEventListener('click', () => {
+        const toolId = td.getAttribute('data-tool-id');
+        const capId = td.getAttribute('data-cap-id');
+        if (!toolId || !capId) return;
+
+        // If not mapped yet, create mapping and offer uplift task.
+        const row = tcKey(toolId, capId);
+        if (!row) {
+          ensureToolCapability(toolId, capId);
+          saveState();
+        }
+
+        openToolCapabilityModal(toolId, capId);
+      });
+    });
+                      }).join('')}
+                    </tr>
+                  `).join('')}
                 </tbody>
               </table>
+            </div>
+
+            <div class="section-note" style="margin-top:10px;">
+              Tip: use this to find under-used capabilities before buying anything new.
             </div>
           </div>
         </div>
@@ -2401,41 +4129,134 @@
           <div class="card-inner">
             <div class="card-header">
               <div>
-                <div class="card-title">How to Read This</div>
-                <div class="card-subtitle">From &quot;tool zoo&quot; → coherent platform strategy.</div>
+                <div class="card-title">Legend</div>
+                <div class="card-subtitle">0–5 maturity scale.</div>
               </div>
             </div>
 
             <div class="detail-panel">
-              <div class="detail-title">Legend</div>
+              <div class="detail-title">Meaning</div>
               <div class="detail-body">
                 <ul style="margin:6px 0 0 18px; padding:0; font-size:0.86rem;">
-                  <li><span class="badge heatmap-cell-none" style="border:none;">&nbsp;&nbsp;&nbsp;</span> — No relationship or not in use.</li>
-                  <li><span class="badge heatmap-cell-low" style="border:none;">&nbsp;&nbsp;&nbsp;</span> — Level 1: Deployed / basic usage.</li>
-                  <li><span class="badge heatmap-cell-med" style="border:none;">&nbsp;&nbsp;&nbsp;</span> — Level 2: Use-case driven.</li>
-                  <li><span class="badge heatmap-cell-high" style="border:none;">&nbsp;&nbsp;&nbsp;</span> — Level 3: Optimized / automated.</li>
+                  <li><span class="badge hm0" style="border:none;">&nbsp;&nbsp;&nbsp;</span> 0 – unused/disabled</li>
+                  <li><span class="badge hm1" style="border:none;">&nbsp;&nbsp;&nbsp;</span> 1 – basic/ad-hoc</li>
+                  <li><span class="badge hm2" style="border:none;">&nbsp;&nbsp;&nbsp;</span> 2 – repeatable but informal</li>
+                  <li><span class="badge hm3" style="border:none;">&nbsp;&nbsp;&nbsp;</span> 3 – defined & documented</li>
+                  <li><span class="badge hm4" style="border:none;">&nbsp;&nbsp;&nbsp;</span> 4 – measured & managed</li>
+                  <li><span class="badge hm5" style="border:none;">&nbsp;&nbsp;&nbsp;</span> 5 – optimized</li>
                 </ul>
               </div>
 
               <div style="margin-top:10px;">
-                <div class="section-title">Patterns to look for</div>
+                <div class="section-title">What to do next</div>
                 <div class="detail-body">
                   <ul style="margin:6px 0 0 18px; padding:0; font-size:0.86rem;">
-                    <li>Rows with few or no colored cells → capabilities that lack tool support.</li>
-                    <li>Columns with many colored cells → strategic platforms; consider doubling down.</li>
-                    <li>Tools with scattered low-level coverage → candidates for consolidation or targeted uplift.</li>
+                    <li>Pick a critical capability with mostly low cells.</li>
+                    <li>Choose one platform to uplift by +1 maturity this quarter.</li>
+                    <li>Create 1–3 tasks and tie them to a project.</li>
                   </ul>
                 </div>
               </div>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+    `;
+
+    container.querySelectorAll('.hm-cell').forEach(td => {
+      td.addEventListener('click', () => {
+        const toolId = td.dataset.toolId;
+        renderView('tools', toolId);
+        // scroll to tool panel
+        setTimeout(() => {
+          const el = document.querySelector(`[data-tool-id="${toolId}"]`);
+          el?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+        }, 50);
+      });
+    });
+  }
+
+
+  function renderSkills() {
+    const container = document.getElementById('view-container');
+
+    container.innerHTML = `
+      <div class="grid">
+        <div class="card">
+          <div class="card-inner">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Team Skills Matrix</div>
+                <div class="card-subtitle">Coverage across critical domains.</div>
+              </div>
+            </div>
+
+            <div class="list">
+              ${skills
+                .map(s => {
+                  const gap = s.target - s.level;
+                  const className =
+                    gap <= 0 ? 'ok' : gap === 1 ? 'warn' : 'bad';
+                  const label =
+                    gap <= 0
+                      ? 'Target met'
+                      : gap === 1
+                      ? 'Near target'
+                      : 'Needs uplift';
+
+                  return `
+                    <div class="list-item" style="cursor:default">
+                      <div><strong>${s.person}</strong> — ${s.skill}</div>
+                      <div class="badge-row">
+                        <span class="badge chip">
+                          Level ${s.level} / ${s.target}
+                        </span>
+                        <span class="badge">
+                          <span class="tag-dot ${className}"></span>${label}
+                        </span>
+                      </div>
+                    </div>
+                  `;
+                })
+                .join('')}
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-inner">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Coverage Highlights</div>
+                <div class="card-subtitle">Where to invest training and hiring.</div>
+              </div>
+            </div>
+
+            <div class="detail-panel">
+              <div class="detail-title">Gaps worth watching</div>
+              <div class="detail-body">
+                <ul style="margin:6px 0 0 18px; padding:0; font-size:0.86rem;">
+                  <li>AI / GenAI strategy and guardrails.</li>
+                  <li>OT / ICS security depth for critical environments.</li>
+                  <li>Cloud security engineering, especially for multi-cloud.</li>
+                  <li>Crisis communications and cross-business incident leadership.</li>
+                </ul>
+              </div>
 
               <div style="margin-top:10px;">
-                <div class="section-title">Next moves</div>
-                <div class="detail-body">
-                  Use this heatmap in planning:
-                  <ul style="margin:6px 0 0 18px; padding:0; font-size:0.86rem;">
-                    <li>Pick one strategic platform per year to push from Level 1 → 3 for its key capabilities.</li>
-                    <li>Align your <strong>Roadmap</strong> and <strong>Projects</strong> to turn &quot;low&quot; cells into &quot;med&quot; / &quot;high&quot; on your top risks.</li>
-                  </ul>
+                <div class="section-title">Actions</div>
+                <div class="list">
+                  <div class="list-item" style="cursor:default">
+                    <div>Turn the biggest skill gaps into targeted learning paths or hiring plans.</div>
+                  </div>
+                  <div class="list-item" style="cursor:default">
+                    <div>Pair junior staff with senior leads via structured shadowing in IR, threat detection, and cloud.</div>
+                  </div>
+                  <div class="list-item" style="cursor:default">
+                    <div>Run a quarterly skills review alongside your maturity assessment.</div>
+                  </div>
                 </div>
               </div>
 
@@ -2445,6 +4266,572 @@
       </div>
     `;
   }
+
+  function renderIR() {
+    const container = document.getElementById('view-container');
+
+    container.innerHTML = `
+      <div class="grid">
+        <div class="card">
+          <div class="card-inner">
+            <div class="card-header">
+              <div>
+                <div class="card-title">IR Playbooks</div>
+                <div class="card-subtitle">Key scenarios and their test cadence.</div>
+              </div>
+            </div>
+
+            <div class="list">
+              ${irPlaybooks
+                .map(pb => {
+                  const statusClassName =
+                    pb.status === 'Healthy'
+                      ? 'ok'
+                      : pb.status === 'Needs Retest'
+                      ? 'warn'
+                      : 'bad';
+
+                  return `
+                    <div class="list-item" style="cursor:default">
+                      <div><strong>${pb.name}</strong></div>
+                      <div class="section-note">Owner: ${pb.owner}</div>
+                      <div class="badge-row">
+                        <span class="badge chip">
+                          <span class="tag-dot ${statusClassName}"></span>${pb.status}
+                        </span>
+                        <span class="badge">Last tested: ${pb.lastTested}</span>
+                      </div>
+                    </div>
+                  `;
+                })
+                .join('')}
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-inner">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Readiness Checklist</div>
+                <div class="card-subtitle">Before the next big incident.</div>
+              </div>
+            </div>
+
+            <div class="detail-panel">
+              <div class="detail-title">Questions to answer</div>
+              <div class="detail-body">
+                <ul style="margin:6px 0 0 18px; padding:0; font-size:0.86rem;">
+                  <li>Do we know who leads which scenario, by name, not title?</li>
+                  <li>When was the last time we rehearsed with business and comms, not just security?</li>
+                  <li>Do we have pre-approved comms templates for regulators, customers, and staff?</li>
+                  <li>Have we run at least one cross-domain scenario (e.g., ransomware + OT impact)?</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderMetrics() {
+    const container = document.getElementById('view-container');
+
+    container.innerHTML = `
+      <div class="grid">
+        <div class="card">
+          <div class="card-inner">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Key Security Metrics</div>
+                <div class="card-subtitle">Blend operational and executive views.</div>
+              </div>
+            </div>
+
+            <div class="list">
+              ${metrics
+                .map(m => {
+                  const statusClassName =
+                    m.trend === 'improving'
+                      ? 'ok'
+                      : m.trend === 'steady'
+                      ? 'warn'
+                      : 'bad';
+                  const label =
+                    m.trend === 'improving'
+                      ? 'Improving'
+                      : m.trend === 'steady'
+                      ? 'Flat'
+                      : 'Needs attention';
+                  return `
+                    <div class="list-item" style="cursor:default">
+                      <div><strong>${m.name}</strong></div>
+                      <div class="badge-row">
+                        <span class="badge chip">${m.value}</span>
+                        <span class="badge">
+                          <span class="tag-dot ${statusClassName}"></span>${label}
+                        </span>
+                      </div>
+                    </div>
+                  `;
+                })
+                .join('')}
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-inner">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Metric Design</div>
+                <div class="card-subtitle">Avoid vanity metrics; aim for decisions.</div>
+              </div>
+            </div>
+
+            <div class="detail-panel">
+              <div class="detail-title">Good metrics usually...</div>
+              <div class="detail-body">
+                <ul style="margin:6px 0 0 18px; padding:0; font-size:0.86rem;">
+                  <li>Are tied to a capability (e.g., SIEM, IR, cloud security).</li>
+                  <li>Lead to a decision if the number moves in the wrong direction.</li>
+                  <li>Have a clearly defined owner and data source.</li>
+                  <li>Are stable over time so you can show progress to executives.</li>
+                </ul>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderTools() {
+    const container = document.getElementById('view-container');
+
+    const avgTc = toolCapabilities.length
+      ? toolCapabilities.reduce((s, tc) => s + (Number(tc.currentMaturity) || 0), 0) / toolCapabilities.length
+      : 0;
+
+    container.innerHTML = `
+      <div class="grid">
+        <div class="card">
+          <div class="card-inner">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Tools & Platforms</div>
+                <div class="card-subtitle">Track what each tool can do (capabilities) and how mature each capability is (0–5).</div>
+              </div>
+              <div class="metric-pill"><span class="tag-dot"></span>${tools.length} tools</div>
+            </div>
+
+            <div class="section-note">
+              A tool doesn’t have one maturity score. Each tool has multiple capabilities, and each capability can mature independently.
+            </div>
+
+            <div class="list">
+              ${tools.map(tool => {
+                const rows = toolCapabilities.filter(tc => tc.toolId === tool.id);
+                const rowsAvg = rows.length
+                  ? (rows.reduce((s, r) => s + (Number(r.currentMaturity) || 0), 0) / rows.length).toFixed(1)
+                  : '0.0';
+
+                const lastReviewed = rows.map(r => r.lastReviewed).filter(Boolean).sort().slice(-1)[0] || '—';
+
+                return `
+                  <div class="detail-panel" style="margin-top:10px; cursor:default;">
+                    <div class="detail-title">${tool.name}</div>
+                    <div class="detail-domain">${tool.vendor || 'Vendor'} · ${tool.category || 'Category'}</div>
+
+                    <div class="chips-row">
+                      <span class="chip-pill em">Avg capability maturity: ${rowsAvg} / 5</span>
+                      <span class="chip-pill">Capabilities: ${rows.length}</span>
+                      <span class="chip-pill">Last reviewed: ${lastReviewed}</span>
+                    </div>
+
+                    ${tool.notes ? `<div class="detail-body" style="margin-top:6px;">${escapeHtml(tool.notes)}</div>` : ''}
+
+                    <div class="action-row">
+                      <button type="button" class="action-link tool-edit" data-tool-id="${tool.id}">Edit</button>
+                      <button type="button" class="action-link danger tool-delete" data-tool-id="${tool.id}">Delete</button>
+                    </div>
+
+                    <div style="margin-top:10px;">
+                      <div class="section-title">Capabilities in this tool</div>
+
+                      <div class="list">
+                        ${rows.length ? rows.map(r => {
+                          const cap = capabilities.find(c => c.id === r.capabilityId);
+                          const capName = cap ? cap.name : r.capabilityId;
+                          return `
+                            <div class="list-item" style="cursor:default">
+                              <div><strong>${capName}</strong></div>
+                              <div class="section-note">${cap ? cap.domain : ''}</div>
+
+                              <div class="badge-row">
+                                <span class="badge chip cap-maturity-pill" data-tc-id="${r.id}" title="Click to cycle 0→5">
+                                  <span class="tag-dot ${Number(r.currentMaturity) >= Number(r.targetMaturity || 3) ? '' : (Number(r.targetMaturity || 3) - Number(r.currentMaturity || 0) === 1 ? 'warn' : 'bad')}"></span>
+                                  Maturity ${Number(r.currentMaturity || 0)} / 5 · Target ${Number(r.targetMaturity || 3)}
+                                </span>
+                                <span class="badge">Reviewed: ${r.lastReviewed || '—'}</span>
+                              </div>
+
+                              <div class="section-note" style="margin-top:6px;">Notes</div>
+                              <textarea class="textarea-input tc-notes" data-tc-id="${r.id}" rows="2" placeholder="Evidence / what’s missing / next steps...">${escapeHtml(r.notes || '')}</textarea>
+
+                              <div class="action-row">
+                                <button type="button" class="action-link tc-set-target" data-tc-id="${r.id}">Set target</button>
+                                <button type="button" class="action-link danger tc-remove" data-tc-id="${r.id}">Remove</button>
+                              </div>
+                            </div>
+                          `;
+                        }).join('') : `<div class="section-note">No capabilities mapped yet. Add one below.</div>`}
+                      </div>
+
+                      <div class="detail-panel" style="margin-top:10px;">
+                        <div class="detail-title">Add capability to this tool</div>
+                        <div class="form-row">
+                          <select class="select-input tc-add-cap" data-tool-id="${tool.id}">
+                            ${capabilities.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
+                          </select>
+                          <button class="mini-btn tc-add-btn" data-tool-id="${tool.id}">Add</button>
+                        </div>
+                        <div class="section-note" style="margin-top:6px;">
+                          This creates a Tool × Capability row you can mature over time.
+                        </div>
+                      </div>
+
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+
+            <div class="detail-panel" style="margin-top:12px;">
+              <div class="detail-title">Add Tool</div>
+              <div class="detail-body">
+                <button class="primary-btn" id="add-tool-btn" type="button">Add Tool</button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-inner">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Summary</div>
+                <div class="card-subtitle">Program-level tool capability maturity.</div>
+              </div>
+            </div>
+
+            <div class="detail-panel">
+              <div class="detail-title">At a glance</div>
+              <div class="grid-2">
+                <div class="pill-stat">
+                  <span class="pill-stat-label">Mapped tool-capabilities</span>
+                  <span class="pill-stat-value">${toolCapabilities.length}</span>
+                </div>
+                <div class="pill-stat">
+                  <span class="pill-stat-label">Avg maturity</span>
+                  <span class="pill-stat-value ${avgTc >= 3 ? 'ok' : avgTc >= 2 ? 'warn' : 'bad'}">${avgTc.toFixed(1)} / 5</span>
+                </div>
+              </div>
+
+              <div style="margin-top:10px;">
+                <div class="section-title">How to use this</div>
+                <div class="detail-body">
+                  <ul style="margin:6px 0 0 18px; padding:0; font-size:0.86rem;">
+                    <li>Map 3–5 capabilities for each major platform first.</li>
+                    <li>Set maturity based on real usage (process + people + tuning), not license count.</li>
+                    <li>Pick 1–2 uplift targets per quarter and push them +1 maturity.</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+    `;
+
+    // tool edit/delete
+    container.querySelectorAll('.tool-edit').forEach(btn => {
+      btn.addEventListener('click', (e) => { e.stopPropagation(); editTool(btn.dataset.toolId); });
+    });
+    container.querySelectorAll('.tool-delete').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const tool = tools.find(t => t.id === btn.dataset.toolId);
+        if (!tool) return;
+        openModal({
+          title: 'Delete Tool',
+          subtitle: 'This also removes all Tool × Capability mappings for it.',
+          bodyHtml: `<div class="detail-panel"><div class="detail-title">${escapeHtml(tool.name)}</div><div class="detail-body">Are you sure?</div></div>`,
+          actions: [
+            { label: 'Cancel', className: 'btn', onClick: closeModal },
+            { label: 'Delete', className: 'btn danger', onClick: () => {
+                tools = tools.filter(t => t.id !== tool.id);
+                toolCapabilities = toolCapabilities.filter(tc => tc.toolId !== tool.id);
+                saveState();
+                closeModal();
+                renderView('tools');
+              }}
+          ]
+        });
+      });
+    });
+
+    // add tool button (modal)
+    const addBtn = container.querySelector('#add-tool-btn');
+    addBtn?.addEventListener('click', () => {
+      openFormModal({
+        title: 'Add Tool / App',
+        subtitle: 'Add a platform you already own. Map capabilities next.',
+        fields: [
+          { name: 'name', label: 'Tool Name', type: 'text', required: true, full: true },
+          { name: 'vendor', label: 'Vendor', type: 'text', required: true },
+          { name: 'category', label: 'Category', type: 'text', required: true },
+          { name: 'notes', label: 'Notes', type: 'textarea', rows: 3, full: true }
+        ],
+        initial: { name:'', vendor:'', category:'', notes:'' },
+        saveLabel: 'Add',
+        onSave: (d) => {
+          tools.push({
+            id: 'tool_custom_' + Date.now(),
+            name: String(d.name).trim(),
+            vendor: String(d.vendor).trim(),
+            category: String(d.category).trim(),
+            notes: d.notes || ''
+          });
+          saveState();
+          renderView('tools');
+        }
+      });
+    });
+
+    // Add capability to tool
+    container.querySelectorAll('.tc-add-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const toolId = btn.dataset.toolId;
+        const sel = container.querySelector(`.tc-add-cap[data-tool-id="${toolId}"]`);
+        const capId = sel?.value;
+        if (!capId) return;
+        ensureToolCapability(toolId, capId);
+        renderView('tools');
+      });
+    });
+
+    // Cycle maturity
+    container.querySelectorAll('.cap-maturity-pill').forEach(pill => {
+      pill.addEventListener('click', () => {
+        cycleToolCapMaturity(pill.dataset.tcId);
+        renderView('tools');
+      });
+    });
+
+    // Notes update
+    container.querySelectorAll('.tc-notes').forEach(area => {
+      area.addEventListener('change', () => {
+        const tc = toolCapabilities.find(x => x.id === area.dataset.tcId);
+        if (!tc) return;
+        tc.notes = area.value;
+        tc.lastReviewed = new Date().toISOString().slice(0, 10);
+        saveState();
+      });
+    });
+
+    // Set target
+    container.querySelectorAll('.tc-set-target').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const tc = toolCapabilities.find(x => x.id === btn.dataset.tcId);
+        if (!tc) return;
+        openFormModal({
+          title: 'Set Target Maturity',
+          subtitle: 'Target maturity for this tool capability (0–5).',
+          fields: [
+            { name: 'targetMaturity', label: 'Target (0–5)', type: 'number', min: 0, max: 5, step: 1, required: true, full: true }
+          ],
+          initial: { targetMaturity: Number(tc.targetMaturity ?? 3) },
+          onSave: (d) => {
+            const n = Number(d.targetMaturity);
+            if (Number.isNaN(n) || n < 0 || n > 5) return;
+            tc.targetMaturity = n;
+            tc.lastReviewed = new Date().toISOString().slice(0, 10);
+            saveState();
+            renderView('tools');
+          }
+        });
+      });
+    });
+
+    // Remove mapping
+    container.querySelectorAll('.tc-remove').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const tc = toolCapabilities.find(x => x.id === btn.dataset.tcId);
+        if (!tc) return;
+        const capName = capabilities.find(c => c.id === tc.capabilityId)?.name || tc.capabilityId;
+        const toolName = tools.find(t => t.id === tc.toolId)?.name || tc.toolId;
+        openModal({
+          title: 'Remove Capability Mapping',
+          subtitle: `${toolName} → ${capName}`,
+          bodyHtml: `<div class="detail-panel"><div class="detail-body">Remove this capability from this tool?</div></div>`,
+          actions: [
+            { label: 'Cancel', className: 'btn', onClick: closeModal },
+            { label: 'Remove', className: 'btn danger', onClick: () => {
+                removeToolCapabilityRow(btn.dataset.tcId);
+                closeModal();
+                renderView('tools');
+              } }
+          ]
+        });
+      });
+    });
+  }
+
+
+  
+  function renderHeatmap() {
+    const container = document.getElementById('view-container');
+
+    container.innerHTML = `
+      <div class="grid">
+        <div class="card">
+          <div class="card-inner">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Tool Capability Heatmap</div>
+                <div class="card-subtitle">Cell = maturity (0–5) for Tool × Capability. Click a cell to jump to that tool.</div>
+              </div>
+            </div>
+
+            <div class="section-note">
+              Missing cells mean the capability hasn’t been mapped to that tool yet. Map it in <strong>Tools & Platforms</strong>.
+            </div>
+
+            <div class="heatmap-wrapper">
+              <table class="heatmap">
+                <thead>
+                  <tr>
+                    <th>Capability</th>
+                    ${tools.map(t => `<th class="hm-tool-header" data-tool-id="${t.id}" title="${escapeHtml(t.vendor || '')} • ${escapeHtml(t.category || '')}
+Click to open tool">${escapeHtml(t.name)}</th>`).join('')}
+                  </tr>
+                </thead>
+                <tbody>
+                  ${capabilities.map(cap => `
+                    <tr>
+                      <td class="hm-cap-row" data-cap-id="${cap.id}" title="Click to open capability">${escapeHtml(cap.name)}</td>
+                      ${tools.map(tool => {
+                        const row = tcKey(tool.id, cap.id);
+                        const lvl = row ? Number(row.currentMaturity || 0) : 0;
+                        const cls = row ? hmClass(lvl) : 'hm0';
+                        const label = row ? `L${lvl}` : '';
+                        const title = `${tool.name} × ${cap.name}` + (row ? `
+Maturity ${lvl}/5 (Target ${row.targetMaturity ?? 3})` : `
+Not mapped yet`);
+                        return `<td class="${cls} hm-cell" data-tool-id="${tool.id}" data-cap-id="${cap.id}" title="${escapeHtml(title)}">${label}</td>`;
+
+    // Drilldowns: headers + cells
+    container.querySelectorAll('.hm-tool-header').forEach(th => {
+      th.addEventListener('click', () => {
+        renderView('tools', th.getAttribute('data-tool-id'));
+      });
+    });
+
+    container.querySelectorAll('.hm-cap-row').forEach(td => {
+      td.addEventListener('click', () => {
+        renderView('capabilities', td.getAttribute('data-cap-id'));
+      });
+    });
+
+    container.querySelectorAll('.hm-cell').forEach(td => {
+      td.addEventListener('click', () => {
+        const toolId = td.getAttribute('data-tool-id');
+        const capId = td.getAttribute('data-cap-id');
+        if (!toolId || !capId) return;
+
+        // If not mapped yet, create mapping and offer uplift task.
+        const row = tcKey(toolId, capId);
+        if (!row) {
+          ensureToolCapability(toolId, capId);
+          saveState();
+        }
+
+        openToolCapabilityModal(toolId, capId);
+      });
+    });
+                      }).join('')}
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+
+            <div class="section-note" style="margin-top:10px;">
+              Tip: use this to find under-used capabilities before buying anything new.
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-inner">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Legend</div>
+                <div class="card-subtitle">0–5 maturity scale.</div>
+              </div>
+            </div>
+
+            <div class="detail-panel">
+              <div class="detail-title">Meaning</div>
+              <div class="detail-body">
+                <ul style="margin:6px 0 0 18px; padding:0; font-size:0.86rem;">
+                  <li><span class="badge hm0" style="border:none;">&nbsp;&nbsp;&nbsp;</span> 0 – unused/disabled</li>
+                  <li><span class="badge hm1" style="border:none;">&nbsp;&nbsp;&nbsp;</span> 1 – basic/ad-hoc</li>
+                  <li><span class="badge hm2" style="border:none;">&nbsp;&nbsp;&nbsp;</span> 2 – repeatable but informal</li>
+                  <li><span class="badge hm3" style="border:none;">&nbsp;&nbsp;&nbsp;</span> 3 – defined & documented</li>
+                  <li><span class="badge hm4" style="border:none;">&nbsp;&nbsp;&nbsp;</span> 4 – measured & managed</li>
+                  <li><span class="badge hm5" style="border:none;">&nbsp;&nbsp;&nbsp;</span> 5 – optimized</li>
+                </ul>
+              </div>
+
+              <div style="margin-top:10px;">
+                <div class="section-title">What to do next</div>
+                <div class="detail-body">
+                  <ul style="margin:6px 0 0 18px; padding:0; font-size:0.86rem;">
+                    <li>Pick a critical capability with mostly low cells.</li>
+                    <li>Choose one platform to uplift by +1 maturity this quarter.</li>
+                    <li>Create 1–3 tasks and tie them to a project.</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+    `;
+
+    container.querySelectorAll('.hm-cell').forEach(td => {
+      td.addEventListener('click', () => {
+        const toolId = td.dataset.toolId;
+        renderView('tools', toolId);
+        // scroll to tool panel
+        setTimeout(() => {
+          const el = document.querySelector(`[data-tool-id="${toolId}"]`);
+          el?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+        }, 50);
+      });
+    });
+  }
+
 
   function renderSkills() {
     const container = document.getElementById('view-container');
@@ -2985,7 +5372,12 @@
     });
   }
 
+  let currentView = 'overview';
+  let currentSelectedId = null;
+
   function renderView(viewKey, extra) {
+    currentView = viewKey;
+    currentSelectedId = extra || null;
     setHeader(viewKey);
     switch (viewKey) {
       case 'overview':
@@ -3036,6 +5428,24 @@
   });
 
   renderView('overview');
+
 </script>
+
+
+  <!-- Modal -->
+  <div id="modal-overlay" class="modal-overlay" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="modal" role="document">
+      <div class="modal-header">
+        <div>
+          <div class="modal-title" id="modal-title">Edit</div>
+          <div class="modal-subtitle" id="modal-subtitle"></div>
+        </div>
+        <button class="modal-close" id="modal-close" aria-label="Close">✕</button>
+      </div>
+      <div class="modal-body" id="modal-body"></div>
+      <div class="modal-actions" id="modal-actions"></div>
+    </div>
+  </div>
+
 </body>
 </html>
