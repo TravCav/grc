@@ -2330,50 +2330,162 @@ if (Array.isArray(data.tasks)) tasks = data.tasks;
   }
   // ---------- Persistence ------------------
 
-  function loadState() {
-    try {
-      const raw = localStorage.getItem('cisoNavigatorDataV1');
-      if (!raw) return;
-      const data = JSON.parse(raw);
-      if (Array.isArray(data.capabilities)) capabilities = data.capabilities;
-      if (Array.isArray(data.tools)) tools = data.tools;
-      
-      if (Array.isArray(data.toolCapabilities)) toolCapabilities = data.toolCapabilities;
-if (Array.isArray(data.tasks)) tasks = data.tasks;
-      if (Array.isArray(data.skills)) skills = data.skills;
-      if (Array.isArray(data.metrics)) metrics = data.metrics;
-      if (Array.isArray(data.irPlaybooks)) irPlaybooks = data.irPlaybooks;
-      if (Array.isArray(data.projects)) projects = data.projects;
-    } catch (e) {
-      console.warn('Could not load state from localStorage', e);
+  const STORAGE_KEY = 'infosecNavigatorDataV2';
+const LEGACY_KEYS = ['cisoNavigatorDataV1'];
+
+function loadState() {
+  try {
+    let raw = localStorage.getItem(STORAGE_KEY);
+    let usedLegacy = false;
+
+    if (!raw) {
+      for (const k of LEGACY_KEYS) {
+        raw = localStorage.getItem(k);
+        if (raw) { usedLegacy = true; break; }
+      }
     }
-  }
+    if (!raw) return;
 
-  function saveState() {
-    try {
-      const data = {
-        capabilities,
-        tools,
-        toolCapabilities,
-        tasks,
-        skills,
-        metrics,
-        irPlaybooks,
-        projects,
-        globalFilterCapabilityIds,
-        globalFilterDomainIndex,
-        globalFilterLabel,
-        globalFilterToolId
-      };
-      localStorage.setItem('cisoNavigatorDataV1', JSON.stringify(data));
-    } catch (e) {
-      console.warn('Could not save state to localStorage', e);
+    const data = JSON.parse(raw);
+
+    // Only overwrite seeded defaults when the loaded arrays are non-empty.
+    // This avoids older saved states (or partial states) wiping out new features like toolCapabilities.
+    if (Array.isArray(data.capabilities) && data.capabilities.length) capabilities = data.capabilities;
+    if (Array.isArray(data.tools) && data.tools.length) tools = data.tools;
+    if (Array.isArray(data.toolCapabilities) && data.toolCapabilities.length) toolCapabilities = data.toolCapabilities;
+    if (Array.isArray(data.tasks) && data.tasks.length) tasks = data.tasks;
+    if (Array.isArray(data.skills) && data.skills.length) skills = data.skills;
+    if (Array.isArray(data.metrics) && data.metrics.length) metrics = data.metrics;
+    if (Array.isArray(data.irPlaybooks) && data.irPlaybooks.length) irPlaybooks = data.irPlaybooks;
+    if (Array.isArray(data.projects) && data.projects.length) projects = data.projects;
+
+    // Filters (safe even if empty/undefined)
+    if (Array.isArray(data.globalFilterCapabilityIds)) globalFilterCapabilityIds = data.globalFilterCapabilityIds;
+    if (typeof data.globalFilterDomainIndex === 'number') globalFilterDomainIndex = data.globalFilterDomainIndex;
+    if (typeof data.globalFilterLabel === 'string') globalFilterLabel = data.globalFilterLabel;
+    if (typeof data.globalFilterToolId === 'string') globalFilterToolId = data.globalFilterToolId;
+
+    // If we loaded from a legacy key, immediately migrate to the new key.
+    if (usedLegacy) {
+      saveState();
     }
+  } catch (e) {
+    console.warn('Could not load state from localStorage', e);
   }
+}
 
-  loadState();
+function saveState() {
+  try {
+    const data = {
+      capabilities,
+      tools,
+      toolCapabilities,
+      tasks,
+      skills,
+      metrics,
+      irPlaybooks,
+      projects,
+      globalFilterCapabilityIds,
+      globalFilterDomainIndex,
+      globalFilterLabel,
+      globalFilterToolId
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  } catch (e) {
+    console.warn('Could not save state to localStorage', e);
+  }
+}
 
-  // ---------- Helpers ------------------
+loadState();
+
+// Seed default Tool × Capability mappings when none exist (e.g., first run or imported state without mappings).
+function seedDefaultToolCapabilitiesIfEmpty() {
+  if (Array.isArray(toolCapabilities) && toolCapabilities.length) return;
+
+  const capByName = (name) => capabilities.find(c => (c.name || '').toLowerCase() === name.toLowerCase());
+  const capById = (id) => capabilities.find(c => c.id === id);
+
+  const pickCap = (...candidates) => {
+    for (const c of candidates) {
+      const found = capById(c) || capByName(c);
+      if (found) return found;
+    }
+    return null;
+  };
+
+  const now = new Date().toISOString().slice(0,10);
+
+  const defaultsByCategory = (category) => {
+    const cat = (category || '').toLowerCase();
+    if (cat.includes('siem') || cat.includes('log')) return [
+      pickCap('siem','Log Analysis & SIEM'),
+      pickCap('Threat Detection'),
+      pickCap('Automation & Analytics')
+    ];
+    if (cat.includes('edr') || cat.includes('xdr') || cat.includes('endpoint')) return [
+      pickCap('Endpoint & Network Protection'),
+      pickCap('Threat Detection'),
+      pickCap('Identity & Access Management')
+    ];
+    if (cat.includes('soar') || cat.includes('case')) return [
+      pickCap('soar','SOAR Automation'),
+      pickCap('Incident Management'),
+      pickCap('Automation & Analytics')
+    ];
+    if (cat.includes('cspm') || cat.includes('cnapp') || cat.includes('cloud')) return [
+      pickCap('cloud','Cloud Security Posture Management'),
+      pickCap('Application Security'),
+      pickCap('Data Protection & Privacy')
+    ];
+    if (cat.includes('ot') || cat.includes('ics')) return [
+      pickCap('ot','OT / ICS Visibility'),
+      pickCap('Asset Management'),
+      pickCap('Risk Management & TPRM')
+    ];
+    // Generic fallbacks
+    return [
+      pickCap('Asset Management'),
+      pickCap('Risk Management & TPRM')
+    ];
+  };
+
+  const uniq = (arr) => {
+    const seen = new Set();
+    return arr.filter(x => x && !seen.has(x.id) && (seen.add(x.id), true));
+  };
+
+  const ensureRow = (toolId, capId, current, target, notes) => {
+    toolCapabilities.push({
+      id: 'tc_' + toolId + '_' + capId + '_' + Date.now() + '_' + Math.floor(Math.random()*1000),
+      toolId,
+      capabilityId: capId,
+      currentMaturity: current,
+      targetMaturity: target,
+      notes: notes || '',
+      assessedBy: '',
+      lastReviewed: now,
+      upliftSteps: [],
+      evidence: []
+    });
+  };
+
+  tools.forEach(tool => {
+    const caps = uniq(defaultsByCategory(tool.category));
+    caps.forEach((cap, i) => {
+      // Seed with conservative maturity so the heatmap is meaningful but not overly optimistic.
+      const current = i === 0 ? 2 : 1;
+      const target = 4;
+      ensureRow(tool.id, cap.id, current, target, 'Seeded default mapping (edit to reflect reality).');
+    });
+  });
+
+  saveState();
+}
+seedDefaultToolCapabilitiesIfEmpty();
+
+
+
+// ---------- Helpers ------------------
 
   function cycleStatus(taskId) {
     const task = tasks.find(t => t.id === taskId);
@@ -4246,7 +4358,7 @@ Click to open tool">${escapeHtml(t.name)}</th>`).join('')}
                         const row = tcKey(tool.id, cap.id);
                         const lvl = row ? Number(row.currentMaturity || 0) : 0;
                         const cls = row ? hmClass(lvl) : 'hm0';
-                        const label = row ? `L${lvl}` : '';
+                        const label = row ? `L${lvl}` : '—';
                         const title = `${tool.name} × ${cap.name}` + (row ? `
 Maturity ${lvl}/5 (Target ${row.targetMaturity ?? 3})` : `
 Not mapped yet`);
