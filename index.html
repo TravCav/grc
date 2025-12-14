@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>CISO Navigator</title>
+  <title>InfoSec Navigator</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     :root {
@@ -669,7 +669,28 @@
     }
     .btn.danger{border-color:rgba(248,113,113,.55);color:#fecaca}
 
-  </style>
+  
+    .top-actions{display:flex;align-items:center;gap:10px}
+    .search-wrap{position:relative;min-width:280px;max-width:420px;width:36vw}
+    .search-input{
+      width:100%;background:rgba(15,23,42,.95);border-radius:999px;border:1px solid rgba(148,163,184,.35);
+      color:var(--text);padding:8px 12px 8px 36px;font-size:.85rem;outline:none;
+    }
+    .search-input:focus{border-color:rgba(56,189,248,.8);box-shadow:0 0 0 2px rgba(56,189,248,.15)}
+    .search-icon{position:absolute;left:12px;top:50%;transform:translateY(-50%);opacity:.7;font-size:.9rem;color:var(--muted)}
+    .search-dropdown{
+      position:absolute;top:44px;left:0;right:0;z-index:50;
+      background:rgba(2,6,23,.98);border:1px solid rgba(56,189,248,.35);
+      border-radius:14px;box-shadow:0 18px 40px rgba(0,0,0,.55);overflow:hidden;display:none;
+    }
+    .search-dropdown.open{display:block}
+    .search-item{padding:10px 12px;border-bottom:1px solid rgba(31,41,55,.9);cursor:pointer}
+    .search-item:hover{background:rgba(15,23,42,.9)}
+    .search-item:last-child{border-bottom:none}
+    .search-item-title{font-weight:600;font-size:.86rem}
+    .search-item-sub{font-size:.75rem;color:var(--muted);margin-top:2px}
+    .search-kbd{font-size:.7rem;color:var(--muted);border:1px solid rgba(148,163,184,.35);border-radius:8px;padding:2px 6px}
+</style>
 </head>
 <body>
 <div class="app-shell">
@@ -678,8 +699,8 @@
       <div class="sidebar-header">
         <div class="logo-orb"></div>
         <div>
-          <div class="sidebar-title">CISO Navigator</div>
-          <div class="sidebar-sub">Security Program OS</div>
+          <div class="sidebar-title">InfoSec Navigator</div>
+          <div class="sidebar-sub">InfoSec Program OS</div>
         </div>
       </div>
 
@@ -776,9 +797,9 @@
     <div class="sidebar-footer">
       <div class="sidebar-badge">
         <span class="badge-pip"></span>
-        Small Team Mode
+        Team Mode
       </div>
-      <div>Opinionated steps to build & mature your infosec program.</div>
+      <div>Plan, track, and mature your infosec program at any maturity level.</div>
       <div style="margin-top:10px; display:flex; flex-wrap:wrap; gap:6px;">
         <button class="mini-btn" id="export-json-btn" type="button">Export JSON</button>
         <button class="mini-btn" id="import-json-btn" type="button">Import JSON</button>
@@ -797,13 +818,21 @@
           <span class="sub" id="view-subtitle">High-level snapshot of your security program.</span>
         </div>
         <div class="pill-row">
-          <span class="pill highlight">Guided for small teams</span>
+          <span class="pill highlight">Works for any team</span>
           <span class="pill">NIST CSF</span>
           <span class="pill">Threat Detection</span>
           <span class="pill">IR & SOC</span>
           <span class="pill">GRC</span>
           <span class="pill">AI & GenAI</span>
         </div>
+      </div>
+      <div class="top-actions">
+        <div class="search-wrap">
+          <span class="search-icon">⌕</span>
+          <input id="global-search" class="search-input" type="search" placeholder="Search capabilities, tools, tasks, projects… ( / )" autocomplete="off" />
+          <div id="search-dropdown" class="search-dropdown" aria-label="Search results"></div>
+        </div>
+        <span class="search-kbd">/</span>
       </div>
     </header>
 
@@ -1306,7 +1335,7 @@
       description:
         'Define, maintain, and socialize a governance model, roles, policies, and standards for the security program.',
       tags: ['Governance', 'Policy', 'Standards'],
-      owner: 'CISO',
+      owner: 'Security Lead',
       targetMaturity: 4,
       timeframe: '9 months'
     },
@@ -1410,7 +1439,7 @@
       description:
         'Define policies, guardrails, and technical controls for enterprise use of AI and GenAI, including data protection and model access.',
       tags: ['AI', 'GenAI', 'Governance'],
-      owner: 'CISO / Data Governance',
+      owner: 'Security Lead / Data Governance',
       targetMaturity: 4,
       timeframe: '12 months'
     }
@@ -1765,7 +1794,7 @@
       title: 'Create a one-page security charter and get leadership sign-off',
       capabilityId: 'governance',
       status: 'Not Started',
-      owner: 'CISO / Lead',
+      owner: 'Security Lead',
       quarter: 'Foundation',
       impact: 'High',
       phase: 'Foundation'
@@ -1835,7 +1864,7 @@
       title: 'Publish AI & GenAI acceptable use and data handling rules',
       capabilityId: 'ai',
       status: 'Not Started',
-      owner: 'CISO',
+      owner: 'Security Lead',
       quarter: 'Core',
       impact: 'Medium',
       phase: 'Core'
@@ -1865,7 +1894,7 @@
       title: 'Establish KPIs for detection, response, and patching',
       capabilityId: 'governance',
       status: 'Not Started',
-      owner: 'CISO',
+      owner: 'Security Lead',
       quarter: 'Optimize',
       impact: 'Medium',
       phase: 'Optimize'
@@ -2015,7 +2044,7 @@
       title: 'Publish AI/GenAI policy, guardrails, and testing approach',
       capabilityId: 'ai',
       status: 'Not Started',
-      owner: 'CISO',
+      owner: 'Security Lead',
       quarter: 'Foundation',
       impact: 'Medium',
       phase: 'Foundation'
@@ -2039,8 +2068,8 @@
     { person: 'IR Lead', skill: 'Crisis Communications', level: 2, target: 4 },
     { person: 'Cloud Sec Eng', skill: 'Cloud Security (Azure/AWS)', level: 3, target: 4 },
     { person: 'OT Security', skill: 'OT / ICS Security', level: 2, target: 4 },
-    { person: 'CISO', skill: 'Executive Storytelling', level: 4, target: 5 },
-    { person: 'CISO', skill: 'AI / GenAI Strategy', level: 2, target: 4 }
+    { person: 'Security Lead', skill: 'Executive Storytelling', level: 4, target: 5 },
+    { person: 'Security Lead', skill: 'AI / GenAI Strategy', level: 2, target: 4 }
   ];
 
   let metrics = [
@@ -2100,7 +2129,7 @@
       id: 'proj_ai_governance_mvp',
       name: 'AI Governance MVP',
       capabilityId: 'ai',
-      owner: 'CISO',
+      owner: 'Security Lead',
       start: '2025-03-01',
       target: '2025-08-31',
       maturityImpact: 2,
@@ -2544,8 +2573,8 @@ if (Array.isArray(data.tasks)) tasks = data.tasks;
       },
       guided: {
         bc: 'PROGRAM ▸ GUIDED PLAN',
-        title: 'Guided Plan for Small Teams',
-        sub: 'Start from zero and grow a real security program in phases.'
+        title: 'Guided Plan',
+        sub: 'Use optional structure to accelerate program maturity in phases.'
       },
       capabilities: {
         bc: 'PROGRAM ▸ CAPABILITIES',
@@ -5427,7 +5456,107 @@ Not mapped yet`);
     });
   });
 
-  renderView('overview');
+  
+  /* =========================
+     GLOBAL SEARCH ( / )
+  ========================= */
+  function buildSearchIndex() {
+    const idx = [];
+    capabilities.forEach(c => idx.push({type:'capability', id:c.id, title:c.name, sub:`Capability • ${c.domain}`}));
+    tools.forEach(t => idx.push({type:'tool', id:t.id, title:t.name, sub:`Tool • ${t.vendor} • ${t.category}`}));
+    tasks.forEach(t => idx.push({type:'task', id:t.id, title:t.title, sub:`Task • ${t.status} • ${t.phase || ''}`}));
+    projects.forEach(p => idx.push({type:'project', id:p.id, title:p.name, sub:`Project • ${getProjectStatus ? getProjectStatus(p) : ''}`}));
+    return idx;
+  }
+
+  function openSearchResult(item) {
+    if (!item) return;
+    // Close dropdown
+    const dd = document.getElementById('search-dropdown');
+    dd?.classList.remove('open');
+
+    switch(item.type){
+      case 'capability':
+        renderView('capabilities', item.id);
+        break;
+      case 'tool':
+        renderView('tools');
+        // If editTool exists, open the editor for quick changes
+        if (typeof editTool === 'function') { try { editTool(item.id); } catch(e){} }
+        break;
+      case 'task':
+        renderView('roadmap');
+        if (typeof editTask === 'function') { try { editTask(item.id); } catch(e){} }
+        break;
+      case 'project':
+        renderView('projects');
+        if (typeof editProject === 'function') { try { editProject(item.id); } catch(e){} }
+        break;
+      default:
+        renderView('overview');
+    }
+  }
+
+  function renderSearchDropdown(results) {
+    const dd = document.getElementById('search-dropdown');
+    if (!dd) return;
+    if (!results.length){
+      dd.innerHTML = `<div class="search-item" style="cursor:default"><div class="search-item-title">No results</div><div class="search-item-sub">Try a different keyword.</div></div>`;
+      dd.classList.add('open');
+      return;
+    }
+    dd.innerHTML = results.slice(0, 10).map((r, i) => `
+      <div class="search-item" data-idx="${i}">
+        <div class="search-item-title">${escapeHtml(r.title)}</div>
+        <div class="search-item-sub">${escapeHtml(r.sub || '')}</div>
+      </div>
+    `).join('');
+    dd.classList.add('open');
+
+    // click handlers
+    dd.querySelectorAll('.search-item[data-idx]').forEach(el=>{
+      el.addEventListener('click', ()=>{
+        const i = parseInt(el.getAttribute('data-idx'),10);
+        openSearchResult(results[i]);
+      });
+    });
+  }
+
+  function wireGlobalSearch() {
+    const input = document.getElementById('global-search');
+    const dd = document.getElementById('search-dropdown');
+    if (!input || !dd) return;
+
+    function close(){ dd.classList.remove('open'); }
+    function query(q){
+      const idx = buildSearchIndex();
+      const needle = (q||'').trim().toLowerCase();
+      if (!needle){ close(); return; }
+      const res = idx.filter(x => (x.title||'').toLowerCase().includes(needle) || (x.sub||'').toLowerCase().includes(needle));
+      renderSearchDropdown(res);
+    }
+
+    input.addEventListener('input', ()=>query(input.value));
+    input.addEventListener('focus', ()=>query(input.value));
+
+    document.addEventListener('keydown', (e)=>{
+      if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        const tag = (document.activeElement && document.activeElement.tagName) ? document.activeElement.tagName.toLowerCase() : '';
+        const typing = ['input','textarea','select'].includes(tag);
+        if (!typing) { e.preventDefault(); input.focus(); }
+      }
+      if (e.key === 'Escape') { close(); }
+    });
+
+    document.addEventListener('click', (e)=>{
+      if (!dd.classList.contains('open')) return;
+      const wrap = document.querySelector('.search-wrap');
+      if (wrap && !wrap.contains(e.target)) close();
+    });
+  }
+
+  wireGlobalSearch();
+renderView('overview');
 
 </script>
 
