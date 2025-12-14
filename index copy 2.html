@@ -1,0 +1,2825 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>CISO Navigator</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      --bg: #0b1220;
+      --bg-alt: #020617;
+      --card: #111827;
+      --card-alt: #020617;
+      --accent: #38bdf8;
+      --accent-soft: rgba(56, 189, 248, 0.2);
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --border: #1f2933;
+      --danger: #f97373;
+      --success: #34d399;
+      --warning: #facc15;
+      --radius-lg: 14px;
+      --radius-sm: 8px;
+      --shadow-soft: 0 18px 40px rgba(15, 23, 42, 0.7);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: radial-gradient(circle at top left, #111827, #020617 50%, #000 100%);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+    }
+
+    .app-shell {
+      display: flex;
+      width: 100%;
+      min-height: 100vh;
+    }
+
+    .sidebar {
+      width: 260px;
+      background: linear-gradient(to bottom, #020617, #020617 40%, #020617);
+      border-right: 1px solid rgba(148, 163, 184, 0.15);
+      padding: 20px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .sidebar-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .logo-orb {
+      width: 32px;
+      height: 32px;
+      border-radius: 999px;
+      background: radial-gradient(circle at 30% 20%, #38bdf8, #0ea5e9 40%, #0f172a 75%);
+      box-shadow:
+        0 0 18px rgba(56, 189, 248, 0.7),
+        0 0 50px rgba(8, 47, 73, 0.9);
+    }
+
+    .sidebar-title {
+      font-size: 1.2rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+    }
+
+    .sidebar-sub {
+      font-size: 0.75rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+    }
+
+    .nav-section-title {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+      color: var(--muted);
+      margin: 14px 6px 4px;
+    }
+
+    .nav-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .nav-item {
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-size: 0.9rem;
+      border: 1px solid transparent;
+      color: var(--muted);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease,
+        transform 0.08s ease;
+      background: transparent;
+    }
+
+    .nav-item:hover {
+      background: rgba(15, 23, 42, 0.9);
+      border-color: rgba(148, 163, 184, 0.3);
+      color: var(--text);
+      transform: translateY(-1px);
+    }
+
+    .nav-item.active {
+      background: radial-gradient(circle at 0% 0%, #0ea5e9, #0369a1 55%, #020617 100%);
+      color: #ecfeff;
+      border-color: rgba(56, 189, 248, 0.7);
+      box-shadow: 0 0 0 1px rgba(8, 47, 73, 0.9), 0 0 18px rgba(8, 47, 73, 0.9);
+    }
+
+    .nav-pill-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .nav-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: rgba(148, 163, 184, 0.4);
+    }
+
+    .nav-item.active .nav-dot {
+      background: #fbbf24;
+      box-shadow: 0 0 10px rgba(250, 204, 21, 0.7);
+    }
+
+    .nav-tag {
+      font-size: 0.7rem;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid rgba(148, 163, 184, 0.4);
+    }
+
+    .sidebar-footer {
+      margin-top: auto;
+      font-size: 0.75rem;
+      color: var(--muted);
+      border-top: 1px solid rgba(30, 64, 175, 0.6);
+      padding-top: 10px;
+    }
+
+    .sidebar-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid rgba(129, 140, 248, 0.7);
+      margin-bottom: 6px;
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+    }
+
+    .badge-pip {
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: #4ade80;
+      box-shadow: 0 0 10px rgba(34, 197, 94, 0.7);
+    }
+
+    .main {
+      flex: 1;
+      padding: 18px 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .breadcrumbs {
+      font-size: 0.8rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+    }
+
+    .title {
+      font-size: 1.6rem;
+      font-weight: 600;
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+    }
+
+    .title span.sub {
+      font-size: 0.9rem;
+      color: var(--muted);
+      font-weight: 400;
+    }
+
+    .pill-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 6px;
+    }
+
+    .pill {
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+
+    .pill.highlight {
+      border-color: rgba(56, 189, 248, 0.8);
+      color: #e0f2fe;
+      background: rgba(8, 47, 73, 0.8);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: minmax(0, 2.1fr) minmax(0, 1.3fr);
+      gap: 16px;
+      align-items: flex-start;
+    }
+
+    .card {
+      background: radial-gradient(circle at top left, #111827 0, #020617 55%);
+      border-radius: var(--radius-lg);
+      border: 1px solid rgba(30, 64, 175, 0.7);
+      padding: 16px 16px 14px;
+      box-shadow: var(--shadow-soft);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card::before {
+      content: "";
+      position: absolute;
+      inset: -40%;
+      background:
+        radial-gradient(circle at 0 0, rgba(56, 189, 248, 0.06), transparent 55%),
+        radial-gradient(circle at 80% 20%, rgba(52, 211, 153, 0.06), transparent 55%);
+      opacity: 0.9;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .card-inner { position: relative; z-index: 1; }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 10px;
+    }
+
+    .card-title {
+      font-size: 0.95rem;
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      color: var(--muted);
+    }
+
+    .card-subtitle {
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    .metric-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 6px;
+      font-size: 0.83rem;
+    }
+
+    .metric-label { color: var(--muted); }
+    .metric-value { font-weight: 600; }
+
+    .metric-pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      font-size: 0.75rem;
+      gap: 6px;
+    }
+
+    .sparkline {
+      margin-top: 8px;
+      height: 34px;
+      border-radius: 999px;
+      border: 1px dashed rgba(148, 163, 184, 0.3);
+      background: linear-gradient(to right, rgba(56, 189, 248, 0.1), transparent);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .sparkline-fill {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(
+        to right,
+        rgba(56, 189, 248, 0.5),
+        rgba(129, 140, 248, 0.6),
+        rgba(52, 211, 153, 0.5)
+      );
+      mask-image: linear-gradient(
+        90deg,
+        transparent 0%,
+        #000 15%,
+        #000 60%,
+        transparent 100%
+      );
+      opacity: 0.7;
+    }
+
+    .split {
+      display: grid;
+      grid-template-columns: 1.4fr 1fr;
+      gap: 12px;
+    }
+
+    .list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .list-item {
+      background: rgba(15, 23, 42, 0.9);
+      border-radius: var(--radius-sm);
+      border: 1px solid rgba(31, 41, 55, 0.9);
+      padding: 8px 9px;
+      font-size: 0.86rem;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      cursor: pointer;
+      transition: border-color 0.16s ease, transform 0.06s ease, background 0.16s ease;
+    }
+
+    .list-item:hover {
+      border-color: rgba(56, 189, 248, 0.7);
+      transform: translateY(-1px);
+      background: radial-gradient(circle at top left, #0b1120, #020617 70%);
+    }
+
+    .badge-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 4px;
+    }
+
+    .badge {
+      font-size: 0.7rem;
+      padding: 2px 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      color: var(--muted);
+    }
+
+    .badge.chip {
+      border-color: rgba(56, 189, 248, 0.7);
+      color: #e0f2fe;
+      background: rgba(15, 23, 42, 0.9);
+    }
+
+    .detail-panel {
+      background: rgba(15, 23, 42, 0.95);
+      border-radius: var(--radius-lg);
+      border: 1px solid rgba(30, 64, 175, 0.8);
+      padding: 10px 11px;
+      font-size: 0.86rem;
+      box-shadow: 0 14px 30px rgba(15, 23, 42, 0.8);
+    }
+
+    .detail-title {
+      font-size: 0.95rem;
+      font-weight: 600;
+      margin-bottom: 2px;
+    }
+
+    .detail-domain {
+      font-size: 0.78rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+    }
+
+    .detail-body {
+      margin-top: 6px;
+      line-height: 1.5;
+      color: #e5e7eb;
+    }
+
+    .chips-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 6px;
+    }
+
+    .chip-pill {
+      font-size: 0.75rem;
+      padding: 2px 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      color: var(--muted);
+    }
+
+    .chip-pill.em {
+      border-color: rgba(234, 179, 8, 0.8);
+      color: #facc15;
+      background: rgba(24, 24, 27, 0.9);
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 6px;
+    }
+
+    .pill-stat {
+      background: rgba(15, 23, 42, 0.95);
+      border-radius: 999px;
+      border: 1px solid rgba(30, 64, 175, 0.9);
+      padding: 6px 10px;
+      font-size: 0.8rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .pill-stat-label {
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+      font-size: 0.7rem;
+    }
+
+    .pill-stat-value { font-weight: 600; }
+    .pill-stat-value.ok { color: var(--success); }
+    .pill-stat-value.warn { color: var(--warning); }
+    .pill-stat-value.bad { color: var(--danger); }
+
+    .section-title {
+      font-size: 0.98rem;
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    .section-note {
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    .tag-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      background: #22c55e;
+      margin-right: 4px;
+      display: inline-block;
+    }
+
+    .tag-dot.warn { background: #facc15; }
+    .tag-dot.bad { background: #f97373; }
+
+    .heatmap-wrapper {
+      overflow-x: auto;
+      margin-top: 8px;
+    }
+
+    table.heatmap {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.78rem;
+      min-width: 520px;
+    }
+
+    table.heatmap th,
+    table.heatmap td {
+      border: 1px solid rgba(31, 41, 55, 0.9);
+      padding: 4px 6px;
+      text-align: center;
+      background: rgba(15, 23, 42, 0.9);
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    table.heatmap th {
+      background: rgba(15, 23, 42, 0.95);
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+
+    table.heatmap th:first-child {
+      text-align: left;
+      min-width: 160px;
+      position: sticky;
+      left: 0;
+      z-index: 2;
+    }
+
+    table.heatmap td:first-child {
+      text-align: left;
+      position: sticky;
+      left: 0;
+      z-index: 1;
+      background: rgba(15, 23, 42, 0.95);
+    }
+
+    .heatmap-cell-none {
+      background: rgba(15, 23, 42, 0.9);
+      color: rgba(148, 163, 184, 0.4);
+    }
+
+    .heatmap-cell-low {
+      background: radial-gradient(circle at 30% 0, rgba(56, 189, 248, 0.35), rgba(15, 23, 42, 0.9));
+      color: #e0f2fe;
+    }
+
+    .heatmap-cell-med {
+      background: radial-gradient(circle at 30% 0, rgba(129, 140, 248, 0.45), rgba(15, 23, 42, 0.9));
+      color: #e0f2fe;
+    }
+
+    .heatmap-cell-high {
+      background: radial-gradient(circle at 30% 0, rgba(52, 211, 153, 0.5), rgba(15, 23, 42, 0.9));
+      color: #ecfdf5;
+    }
+
+    .form-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 6px;
+    }
+
+    .form-input,
+    .select-input,
+    .textarea-input {
+      background: rgba(15, 23, 42, 0.95);
+      border-radius: var(--radius-sm);
+      border: 1px solid rgba(31, 41, 55, 0.9);
+      color: var(--text);
+      padding: 6px 8px;
+      font-size: 0.8rem;
+      min-width: 140px;
+      flex: 1;
+    }
+
+    .primary-btn {
+      margin-top: 8px;
+      border-radius: 999px;
+      padding: 6px 14px;
+      border: none;
+      background: linear-gradient(to right, #0ea5e9, #6366f1);
+      color: white;
+      font-size: 0.8rem;
+      font-weight: 500;
+      cursor: pointer;
+      box-shadow: 0 8px 20px rgba(15, 23, 42, 0.7);
+    }
+
+    .primary-btn:hover {
+      filter: brightness(1.05);
+      transform: translateY(-1px);
+    }
+
+    @media (max-width: 900px) {
+      .sidebar { display: none; }
+      .main { padding: 14px; }
+      .grid, .split { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+<div class="app-shell">
+  <aside class="sidebar">
+    <div>
+      <div class="sidebar-header">
+        <div class="logo-orb"></div>
+        <div>
+          <div class="sidebar-title">CISO Navigator</div>
+          <div class="sidebar-sub">Security Program OS</div>
+        </div>
+      </div>
+
+      <div class="nav-section-title">Overview</div>
+      <div class="nav-list">
+        <button class="nav-item active" data-view="overview">
+          <span class="nav-pill-label">
+            <span class="nav-dot"></span>
+            <span>Program Overview</span>
+          </span>
+          <span class="nav-tag">LIVE</span>
+        </button>
+      </div>
+
+      <div class="nav-section-title">Program</div>
+      <div class="nav-list">
+        <button class="nav-item" data-view="guided">
+          <span class="nav-pill-label">
+            <span class="nav-dot"></span>
+            <span>Guided Plan</span>
+          </span>
+          <span class="nav-tag">Start Here</span>
+        </button>
+        <button class="nav-item" data-view="capabilities">
+          <span class="nav-pill-label">
+            <span class="nav-dot"></span>
+            <span>Capability Explorer</span>
+          </span>
+          <span class="nav-tag">Map</span>
+        </button>
+        <button class="nav-item" data-view="maturity">
+          <span class="nav-pill-label">
+            <span class="nav-dot"></span>
+            <span>Maturity Assessment</span>
+          </span>
+          <span class="nav-tag">0–5</span>
+        </button>
+        <button class="nav-item" data-view="projects">
+          <span class="nav-pill-label">
+            <span class="nav-dot"></span>
+            <span>Projects</span>
+          </span>
+          <span class="nav-tag">Epics</span>
+        </button>
+        <button class="nav-item" data-view="roadmap">
+          <span class="nav-pill-label">
+            <span class="nav-dot"></span>
+            <span>Roadmap</span>
+          </span>
+          <span class="nav-tag">Work</span>
+        </button>
+      </div>
+
+      <div class="nav-section-title">Tools & Ops</div>
+      <div class="nav-list">
+        <button class="nav-item" data-view="tools">
+          <span class="nav-pill-label">
+            <span class="nav-dot"></span>
+            <span>Tools & Platforms</span>
+          </span>
+          <span class="nav-tag">Inventory</span>
+        </button>
+        <button class="nav-item" data-view="heatmap">
+          <span class="nav-pill-label">
+            <span class="nav-dot"></span>
+            <span>Tool Heatmap</span>
+          </span>
+          <span class="nav-tag">Matrix</span>
+        </button>
+        <button class="nav-item" data-view="skills">
+          <span class="nav-pill-label">
+            <span class="nav-dot"></span>
+            <span>Skills & Coverage</span>
+          </span>
+          <span class="nav-tag">Team</span>
+        </button>
+        <button class="nav-item" data-view="ir">
+          <span class="nav-pill-label">
+            <span class="nav-dot"></span>
+            <span>IR Hub</span>
+          </span>
+          <span class="nav-tag">IR</span>
+        </button>
+        <button class="nav-item" data-view="metrics">
+          <span class="nav-pill-label">
+            <span class="nav-dot"></span>
+            <span>Metrics & Reporting</span>
+          </span>
+          <span class="nav-tag">EXCO</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="sidebar-footer">
+      <div class="sidebar-badge">
+        <span class="badge-pip"></span>
+        Small Team Mode
+      </div>
+      <div>Opinionated steps to build & mature your infosec program.</div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="top-bar">
+      <div>
+        <div class="breadcrumbs" id="breadcrumbs">PROGRAM ▸ OVERVIEW</div>
+        <div class="title">
+          <span id="view-title">Program Overview</span>
+          <span class="sub" id="view-subtitle">High-level snapshot of your security program.</span>
+        </div>
+        <div class="pill-row">
+          <span class="pill highlight">Guided for small teams</span>
+          <span class="pill">NIST CSF</span>
+          <span class="pill">Threat Detection</span>
+          <span class="pill">IR & SOC</span>
+          <span class="pill">GRC</span>
+          <span class="pill">AI & GenAI</span>
+        </div>
+      </div>
+    </header>
+
+    <section id="view-container"></section>
+  </main>
+</div>
+
+<script>
+  // ---------- Data ------------------
+
+  let capabilities = [
+    {
+      id: 'siem',
+      name: 'Log Analysis & SIEM',
+      domain: 'Threat Detection',
+      nist: ['Detect'],
+      maturity: 2,
+      description:
+        'Centralize, normalize, and correlate logs from infrastructure, cloud, and applications to detect threats and anomalies.',
+      tags: ['SIEM', 'Logging', 'Detection'],
+      owner: 'Threat Detection Lead',
+      targetMaturity: 4,
+      timeframe: '12 months'
+    },
+    {
+      id: 'soar',
+      name: 'SOAR Automation',
+      domain: 'Incident Response',
+      nist: ['Respond'],
+      maturity: 1,
+      description:
+        'Automate enrichment, response, and collaboration for high-volume alerts using playbooks and integrations.',
+      tags: ['Automation', 'Playbooks', 'Enrichment'],
+      owner: 'SOC Manager',
+      targetMaturity: 4,
+      timeframe: '18 months'
+    },
+    {
+      id: 'governance',
+      name: 'Governance & Policy',
+      domain: 'GRC',
+      nist: ['Identify', 'Protect'],
+      maturity: 3,
+      description:
+        'Define, maintain, and socialize a governance model, roles, policies, and standards for the security program.',
+      tags: ['Governance', 'Policy', 'Standards'],
+      owner: 'CISO',
+      targetMaturity: 4,
+      timeframe: '9 months'
+    },
+    {
+      id: 'cloud',
+      name: 'Cloud Security Posture Management',
+      domain: 'Cloud Security',
+      nist: ['Identify', 'Protect', 'Detect'],
+      maturity: 2,
+      description:
+        'Continuously assess and remediate cloud configuration risk across accounts, subscriptions, and resource groups.',
+      tags: ['CSPM', 'Cloud', 'Misconfigurations'],
+      owner: 'Cloud Security Architect',
+      targetMaturity: 4,
+      timeframe: '15 months'
+    },
+    {
+      id: 'ot',
+      name: 'OT / ICS Visibility',
+      domain: 'OT / ICS',
+      nist: ['Identify', 'Detect'],
+      maturity: 1,
+      description:
+        'Establish asset discovery, network monitoring, and risk analysis across OT, ICS, and medical devices where applicable.',
+      tags: ['OT', 'ICS', 'Visibility'],
+      owner: 'OT Security Lead',
+      targetMaturity: 3,
+      timeframe: '24 months'
+    },
+    {
+      id: 'ai',
+      name: 'AI & GenAI Governance',
+      domain: 'Emerging Tech',
+      nist: ['Identify', 'Protect'],
+      maturity: 1,
+      description:
+        'Define policies, guardrails, and technical controls for enterprise use of AI and GenAI, including data protection and model access.',
+      tags: ['AI', 'GenAI', 'Governance'],
+      owner: 'CISO / Data Governance',
+      targetMaturity: 4,
+      timeframe: '12 months'
+    }
+  ];
+
+  let tools = [
+    {
+      id: 'tool_siem',
+      name: 'Splunk Enterprise Security',
+      vendor: 'Splunk',
+      category: 'SIEM',
+      capabilities: ['siem'],
+      currentLevel: 2,
+      targetLevel: 3,
+      currentUse: [
+        'Collects auth / VPN / firewall logs',
+        'Basic correlation searches for failed logins'
+      ],
+      potentialUse: [
+        'Risk-based alerting on users and assets',
+        'Detection engineering mapped to MITRE ATT&CK',
+        'Dashboards for executives and product teams'
+      ]
+    },
+    {
+      id: 'tool_edr',
+      name: 'CrowdStrike Falcon',
+      vendor: 'CrowdStrike',
+      category: 'EDR / XDR',
+      capabilities: ['siem', 'soar'],
+      currentLevel: 2,
+      targetLevel: 3,
+      currentUse: [
+        'Installed on servers and endpoints',
+        'Alerts manually triaged in console'
+      ],
+      potentialUse: [
+        'Tuned detection policies for critical assets',
+        'Integrated with SIEM / SOAR for auto-enrichment',
+        'Containment playbooks for high-severity alerts'
+      ]
+    },
+    {
+      id: 'tool_soar',
+      name: 'TheHive + Cortex',
+      vendor: 'Open Source',
+      category: 'SOAR / Case Management',
+      capabilities: ['soar'],
+      currentLevel: 1,
+      targetLevel: 3,
+      currentUse: [
+        'Used as ticketing for investigations',
+        'Manual note-taking for major incidents'
+      ],
+      potentialUse: [
+        'Standardized case templates per incident type',
+        'Automated enrichment via analyzers',
+        'Metrics on MTTR, case volume, and automation'
+      ]
+    },
+    {
+      id: 'tool_cspm',
+      name: 'Prisma Cloud',
+      vendor: 'Palo Alto Networks',
+      category: 'CSPM / CNAPP',
+      capabilities: ['cloud'],
+      currentLevel: 1,
+      targetLevel: 3,
+      currentUse: [
+        'Basic misconfiguration alerts for one cloud environment'
+      ],
+      potentialUse: [
+        'Policy-as-code for multiple environments',
+        'Risk-based view combining vulnerabilities + exposure',
+        'Guardrails for dev teams in CI/CD'
+      ]
+    },
+    {
+      id: 'tool_ot',
+      name: 'Claroty xDome',
+      vendor: 'Claroty',
+      category: 'OT / ICS Visibility',
+      capabilities: ['ot'],
+      currentLevel: 0,
+      targetLevel: 2,
+      currentUse: [
+        'Planned pilot in one network segment'
+      ],
+      potentialUse: [
+        'Baseline visibility for OT / IoMT assets',
+        'Alerting on unusual network flows',
+        'Support OT-specific IR scenarios'
+      ]
+    }
+  ];
+
+  let tasks = [
+    {
+      id: 't1',
+      title: 'Create a one-page security charter and get leadership sign-off',
+      capabilityId: 'governance',
+      status: 'Not Started',
+      owner: 'CISO / Lead',
+      quarter: 'Foundation',
+      impact: 'High',
+      phase: 'Foundation'
+    },
+    {
+      id: 't2',
+      title: 'Inventory top 10 critical systems and data flows',
+      capabilityId: 'governance',
+      status: 'Not Started',
+      owner: 'Security + IT',
+      quarter: 'Foundation',
+      impact: 'High',
+      phase: 'Foundation'
+    },
+    {
+      id: 't3',
+      title: 'Onboard priority log sources into SIEM (auth, VPN, critical apps)',
+      capabilityId: 'siem',
+      status: 'Not Started',
+      owner: 'Threat Detection Lead',
+      quarter: 'Foundation',
+      impact: 'High',
+      phase: 'Foundation'
+    },
+    {
+      id: 't4',
+      title: 'Write and approve an Incident Response playbook for ransomware',
+      capabilityId: 'soar',
+      status: 'Not Started',
+      owner: 'IR Lead',
+      quarter: 'Foundation',
+      impact: 'High',
+      phase: 'Foundation'
+    },
+    {
+      id: 't5',
+      title: 'Run a basic tabletop exercise using the ransomware playbook',
+      capabilityId: 'soar',
+      status: 'Not Started',
+      owner: 'IR Lead',
+      quarter: 'Core',
+      impact: 'Medium',
+      phase: 'Core'
+    },
+    {
+      id: 't6',
+      title: 'Turn phishing alerts into a repeatable SIEM detection + IR flow',
+      capabilityId: 'siem',
+      status: 'Not Started',
+      owner: 'SOC / IR',
+      quarter: 'Core',
+      impact: 'High',
+      phase: 'Core'
+    },
+    {
+      id: 't7',
+      title: 'Baseline cloud security posture (CSPM) for one cloud platform',
+      capabilityId: 'cloud',
+      status: 'Not Started',
+      owner: 'Cloud Security',
+      quarter: 'Core',
+      impact: 'Medium',
+      phase: 'Core'
+    },
+    {
+      id: 't8',
+      title: 'Publish AI & GenAI acceptable use and data handling rules',
+      capabilityId: 'ai',
+      status: 'Not Started',
+      owner: 'CISO',
+      quarter: 'Core',
+      impact: 'Medium',
+      phase: 'Core'
+    },
+    {
+      id: 't9',
+      title: 'Automate enrichment for high-volume alerts (IP, hash, user context)',
+      capabilityId: 'soar',
+      status: 'Not Started',
+      owner: 'SOC',
+      quarter: 'Optimize',
+      impact: 'Medium',
+      phase: 'Optimize'
+    },
+    {
+      id: 't10',
+      title: 'Formalize a recurring tabletop schedule (quarterly) with business',
+      capabilityId: 'soar',
+      status: 'Not Started',
+      owner: 'IR Lead',
+      quarter: 'Optimize',
+      impact: 'Medium',
+      phase: 'Optimize'
+    },
+    {
+      id: 't11',
+      title: 'Establish KPIs for detection, response, and patching',
+      capabilityId: 'governance',
+      status: 'Not Started',
+      owner: 'CISO',
+      quarter: 'Optimize',
+      impact: 'Medium',
+      phase: 'Optimize'
+    }
+  ];
+
+  let skills = [
+    { person: 'SOC Analyst', skill: 'MITRE ATT&CK', level: 3, target: 4 },
+    { person: 'SOC Analyst', skill: 'SIEM Engineering', level: 2, target: 4 },
+    { person: 'IR Lead', skill: 'Incident Response', level: 4, target: 5 },
+    { person: 'IR Lead', skill: 'Crisis Communications', level: 2, target: 4 },
+    { person: 'Cloud Sec Eng', skill: 'Cloud Security (Azure/AWS)', level: 3, target: 4 },
+    { person: 'OT Security', skill: 'OT / ICS Security', level: 2, target: 4 },
+    { person: 'CISO', skill: 'Executive Storytelling', level: 4, target: 5 },
+    { person: 'CISO', skill: 'AI / GenAI Strategy', level: 2, target: 4 }
+  ];
+
+  let metrics = [
+    { name: 'Mean Time to Detect (MTTD)', value: '3.2 hours', trend: 'improving' },
+    { name: 'Mean Time to Contain (MTTC)', value: '8.5 hours', trend: 'steady' },
+    { name: 'Security automation coverage', value: '24%', trend: 'improving' },
+    { name: 'Critical patch SLA met', value: '87%', trend: 'needs-attention' },
+    { name: 'Phish click-rate', value: '4.1%', trend: 'improving' }
+  ];
+
+  let irPlaybooks = [
+    {
+      name: 'Ransomware Response',
+      lastTested: '8 weeks ago',
+      status: 'Needs Retest',
+      owner: 'IR Lead'
+    },
+    {
+      name: 'Business Email Compromise',
+      lastTested: '2 weeks ago',
+      status: 'Healthy',
+      owner: 'SOC Manager'
+    },
+    {
+      name: 'Cloud Account Compromise',
+      lastTested: '16 weeks ago',
+      status: 'Stale',
+      owner: 'Cloud Security Architect'
+    }
+  ];
+
+  // New: project management / epics
+  let projects = [
+    {
+      id: 'proj_detection2',
+      name: 'Threat Detection 2.0',
+      capabilityId: 'siem',
+      owner: 'Threat Detection Lead',
+      start: '2025-01-01',
+      target: '2025-06-30',
+      maturityImpact: 2,
+      taskIds: ['t3', 't6'],
+      notes: 'Strengthen SIEM coverage and create end-to-end detection + IR flow.'
+    },
+    {
+      id: 'proj_ir_modernization',
+      name: 'IR Modernization',
+      capabilityId: 'soar',
+      owner: 'IR Lead',
+      start: '2025-02-01',
+      target: '2025-09-30',
+      maturityImpact: 2,
+      taskIds: ['t4', 't5', 't9', 't10'],
+      notes: 'Standardize IR playbooks and build automation for high-volume events.'
+    },
+    {
+      id: 'proj_ai_governance_mvp',
+      name: 'AI Governance MVP',
+      capabilityId: 'ai',
+      owner: 'CISO',
+      start: '2025-03-01',
+      target: '2025-08-31',
+      maturityImpact: 1,
+      taskIds: ['t8', 't11'],
+      notes: 'Baseline AI/GenAI usage, define guardrails, and measure adoption.'
+    }
+  ];
+
+  const TOOL_LEVEL_LABELS = [
+    'Not in use',
+    'Deployed / basic',
+    'Use-case driven',
+    'Optimized / automated'
+  ];
+
+  const STATUS_CYCLE = ['Not Started', 'In Progress', 'Blocked', 'Done'];
+
+  // ---------- Persistence ------------------
+
+  function loadState() {
+    try {
+      const raw = localStorage.getItem('cisoNavigatorDataV1');
+      if (!raw) return;
+      const data = JSON.parse(raw);
+      if (Array.isArray(data.capabilities)) capabilities = data.capabilities;
+      if (Array.isArray(data.tools)) tools = data.tools;
+      if (Array.isArray(data.tasks)) tasks = data.tasks;
+      if (Array.isArray(data.skills)) skills = data.skills;
+      if (Array.isArray(data.metrics)) metrics = data.metrics;
+      if (Array.isArray(data.irPlaybooks)) irPlaybooks = data.irPlaybooks;
+      if (Array.isArray(data.projects)) projects = data.projects;
+    } catch (e) {
+      console.warn('Could not load state from localStorage', e);
+    }
+  }
+
+  function saveState() {
+    try {
+      const data = {
+        capabilities,
+        tools,
+        tasks,
+        skills,
+        metrics,
+        irPlaybooks,
+        projects
+      };
+      localStorage.setItem('cisoNavigatorDataV1', JSON.stringify(data));
+    } catch (e) {
+      console.warn('Could not save state to localStorage', e);
+    }
+  }
+
+  loadState();
+
+  // ---------- Helpers ------------------
+
+  function cycleStatus(taskId) {
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+    const idx = STATUS_CYCLE.indexOf(task.status);
+    const nextIdx = idx === -1 ? 0 : (idx + 1) % STATUS_CYCLE.length;
+    task.status = STATUS_CYCLE[nextIdx];
+    saveState();
+  }
+
+  function statusClass(status) {
+    if (status === 'Done') return 'ok';
+    if (status === 'In Progress') return 'warn';
+    if (status === 'Blocked') return 'bad';
+    return '';
+  }
+
+  function cycleToolLevel(toolId) {
+    const tool = tools.find(t => t.id === toolId);
+    if (!tool) return;
+    const next = (tool.currentLevel + 1) % 4;
+    tool.currentLevel = next;
+    saveState();
+  }
+
+  function toolLevelClass(level, target) {
+    if (level >= target) return 'ok';
+    if (target - level === 1) return 'warn';
+    return 'bad';
+  }
+
+  function heatmapCellClass(tool, capId) {
+    if (!tool.capabilities.includes(capId)) return 'heatmap-cell-none';
+    const level = tool.currentLevel;
+    if (level === 0) return 'heatmap-cell-none';
+    if (level === 1) return 'heatmap-cell-low';
+    if (level === 2) return 'heatmap-cell-med';
+    return 'heatmap-cell-high';
+  }
+
+  // Project helpers
+
+  function getProjectTasks(project) {
+    return tasks.filter(t => project.taskIds?.includes(t.id));
+  }
+
+  function getProjectStatus(project) {
+    const projTasks = getProjectTasks(project);
+    if (!projTasks.length) return 'Not Started';
+
+    const allDone = projTasks.every(t => t.status === 'Done');
+    const anyInProgress = projTasks.some(t => t.status === 'In Progress');
+    const anyBlocked = projTasks.some(t => t.status === 'Blocked');
+
+    if (allDone) return 'Complete';
+    if (anyBlocked) return 'Blocked';
+    if (anyInProgress) return 'Active';
+    return 'Not Started';
+  }
+
+  function getProjectProgress(project) {
+    const projTasks = getProjectTasks(project);
+    const total = projTasks.length || 0;
+    const done = projTasks.filter(t => t.status === 'Done').length;
+    const percent = total === 0 ? 0 : Math.round((done / total) * 100);
+    return { done, total, percent };
+  }
+
+  function projectedMaturity(cap) {
+    const impact = projects
+      .filter(p => p.capabilityId === cap.id)
+      .reduce((sum, p) => sum + (p.maturityImpact || 0), 0);
+    const projected = Math.min(cap.targetMaturity, cap.maturity + impact);
+    return projected;
+  }
+
+  // ---------- Header / nav ------------------
+
+  function setHeader(viewKey) {
+    const breadcrumbsEl = document.getElementById('breadcrumbs');
+    const titleEl = document.getElementById('view-title');
+    const subtitleEl = document.getElementById('view-subtitle');
+
+    const configs = {
+      overview: {
+        bc: 'PROGRAM ▸ OVERVIEW',
+        title: 'Program Overview',
+        sub: 'High-level snapshot of your security program.'
+      },
+      guided: {
+        bc: 'PROGRAM ▸ GUIDED PLAN',
+        title: 'Guided Plan for Small Teams',
+        sub: 'Start from zero and grow a real security program in phases.'
+      },
+      capabilities: {
+        bc: 'PROGRAM ▸ CAPABILITIES',
+        title: 'Capability Explorer',
+        sub: 'Your mind map as a navigable capability model.'
+      },
+      maturity: {
+        bc: 'PROGRAM ▸ MATURITY',
+        title: 'Maturity Assessment',
+        sub: '0–5 scoring across all program domains.'
+      },
+      projects: {
+        bc: 'PROGRAM ▸ PROJECTS',
+        title: 'Projects',
+        sub: 'Bundle tasks into epics that move maturity.'
+      },
+      roadmap: {
+        bc: 'PROGRAM ▸ ROADMAP',
+        title: 'Roadmap',
+        sub: 'From gaps to funded, prioritized work.'
+      },
+      tools: {
+        bc: 'OPS ▸ TOOLS',
+        title: 'Tools & Platforms',
+        sub: 'Inventory, current usage, and maturity opportunities.'
+      },
+      heatmap: {
+        bc: 'OPS ▸ HEATMAP',
+        title: 'Tool Heatmap',
+        sub: 'Which tools power which capabilities, and how strongly.'
+      },
+      skills: {
+        bc: 'PEOPLE ▸ SKILLS',
+        title: 'Skills & Coverage',
+        sub: 'Do we have the skills to run the program we designed?'
+      },
+      ir: {
+        bc: 'OPS ▸ INCIDENT RESPONSE',
+        title: 'Incident Response Hub',
+        sub: 'Playbooks, tests, and readiness at a glance.'
+      },
+      metrics: {
+        bc: 'EXCO ▸ METRICS',
+        title: 'Metrics & Reporting',
+        sub: 'Executive-ready, operationally useful measurements.'
+      }
+    };
+
+    const cfg = configs[viewKey] || configs.overview;
+    breadcrumbsEl.textContent = cfg.bc;
+    titleEl.textContent = cfg.title;
+    subtitleEl.textContent = cfg.sub;
+
+    document.querySelectorAll('.nav-item').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.view === viewKey);
+    });
+  }
+
+  // ---------- Views ------------------
+
+  function renderOverview() {
+    const container = document.getElementById('view-container');
+    const avgMaturity =
+      capabilities.reduce((acc, c) => acc + c.maturity, 0) / capabilities.length;
+    const highImpactGaps = capabilities.filter(c => c.maturity <= 2);
+    const doneTasks = tasks.filter(t => t.status === 'Done').length;
+    const avgToolLevel =
+      tools.reduce((acc, t) => acc + (t.currentLevel || 0), 0) /
+      (tools.length || 1);
+    const activeProjectsCount = projects.filter(
+      p => ['Active', 'Blocked'].includes(getProjectStatus(p))
+    ).length;
+
+    container.innerHTML = `
+      <div class="grid">
+        <div class="card">
+          <div class="card-inner">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Program Posture</div>
+                <div class="card-subtitle">Blended view across capabilities, tasks, tools, projects, and metrics.</div>
+              </div>
+              <div class="metric-pill">
+                <span class="tag-dot"></span>
+                Real-time view
+              </div>
+            </div>
+
+            <div class="split">
+              <div>
+                <div class="metric-row">
+                  <div class="metric-label">Average capability maturity</div>
+                  <div class="metric-value">${avgMaturity.toFixed(1)} / 5</div>
+                </div>
+                <div class="metric-row">
+                  <div class="metric-label">Capabilities below target</div>
+                  <div class="metric-value">${highImpactGaps.length} / ${capabilities.length}</div>
+                </div>
+                <div class="metric-row">
+                  <div class="metric-label">Guided plan tasks done</div>
+                  <div class="metric-value">${doneTasks} / ${tasks.length}</div>
+                </div>
+                <div class="metric-row">
+                  <div class="metric-label">Active / blocked projects</div>
+                  <div class="metric-value">${activeProjectsCount} / ${projects.length}</div>
+                </div>
+                <div class="metric-row">
+                  <div class="metric-label">Avg tool adoption level</div>
+                  <div class="metric-value">${avgToolLevel.toFixed(1)} / 3</div>
+                </div>
+
+                <div class="sparkline">
+                  <div class="sparkline-fill"></div>
+                </div>
+              </div>
+              <div>
+                <div class="section-title">Signals</div>
+                <div class="list">
+                  <div class="list-item" style="cursor:default">
+                    <div>Some core tools are deployed but under-used.</div>
+                    <div class="badge-row">
+                      <span class="badge chip">EDR</span>
+                      <span class="badge chip">SIEM</span>
+                      <span class="badge">Use guided plan to add use cases</span>
+                    </div>
+                  </div>
+                  <div class="list-item" style="cursor:default">
+                    <div>AI & GenAI governance exists mostly on paper.</div>
+                    <div class="badge-row">
+                      <span class="badge chip">Emerging Tech</span>
+                      <span class="badge">Target: 4 by ${new Date().getFullYear() + 1}</span>
+                    </div>
+                  </div>
+                  <div class="list-item" style="cursor:default">
+                    <div>OT / ICS visibility is still early and needs sponsorship.</div>
+                    <div class="badge-row">
+                      <span class="badge chip">OT / ICS</span>
+                      <span class="badge">IR impact: High</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-inner">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Priority Domains</div>
+                <div class="card-subtitle">Top focus areas for the next 2–3 quarters.</div>
+              </div>
+            </div>
+
+            <div class="list">
+              ${highImpactGaps
+                .map(
+                  c => `
+                    <div class="list-item" data-jump="capabilities" data-capability-id="${c.id}">
+                      <div><strong>${c.name}</strong></div>
+                      <div class="section-note">Current ${c.maturity} / Target ${
+                    c.targetMaturity
+                  } · ${c.domain}</div>
+                      <div class="badge-row">
+                        <span class="badge chip">${c.nist.join(' / ')}</span>
+                        <span class="badge">Owner: ${c.owner}</span>
+                        <span class="badge">Horizon: ${c.timeframe}</span>
+                        <span class="badge">Projects: ${
+                          projects.filter(p => p.capabilityId === c.id).length
+                        }</span>
+                      </div>
+                    </div>
+                  `
+                )
+                .join('')}
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    container.querySelectorAll('[data-jump="capabilities"]').forEach(el => {
+      el.addEventListener('click', () => {
+        const id = el.getAttribute('data-capability-id');
+        renderView('capabilities', id);
+      });
+    });
+  }
+
+  function renderGuidedPlan() {
+    const container = document.getElementById('view-container');
+    const phases = ['Foundation', 'Core', 'Optimize'];
+
+    function phaseSummary(phase) {
+      const phaseTasks = tasks.filter(t => t.phase === phase);
+      if (!phaseTasks.length) return 'No tasks yet.';
+      const done = phaseTasks.filter(t => t.status === 'Done').length;
+      return `${done} / ${phaseTasks.length} tasks done`;
+    }
+
+    container.innerHTML = `
+      <div class="grid">
+        <div class="card">
+          <div class="card-inner">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Guided Plan</div>
+                <div class="card-subtitle">Opinionated steps to get from zero → functioning security program.</div>
+              </div>
+            </div>
+
+            <div class="section-note">
+              Click the status pill on any task to move it from Not Started → In Progress → Blocked → Done.
+            </div>
+
+            <div class="list">
+              ${phases
+                .map(phase => {
+                  const phaseTasks = tasks.filter(t => t.phase === phase);
+                  if (!phaseTasks.length) return '';
+                  return `
+                    <div class="detail-panel" style="margin-top:8px;">
+                      <div class="detail-title">${phase}</div>
+                      <div class="detail-body">${phase === 'Foundation'
+                        ? 'First 3–6 months: get basic governance, logging, and IR in place.'
+                        : phase === 'Core'
+                        ? '6–18 months: deepen detection, IR, and cloud; start AI guardrails.'
+                        : '18+ months: automate, measure, and systematize.'}
+                      </div>
+                      <div class="chips-row">
+                        <div class="chip-pill em">${phaseSummary(phase)}</div>
+                      </div>
+
+                      <div class="list" style="margin-top:8px;">
+                        ${phaseTasks
+                          .map(t => {
+                            const capName = capabilities.find(c => c.id === t.capabilityId)?.name || '';
+                            const cls = statusClass(t.status);
+                            return `
+                              <div class="list-item" style="cursor:default">
+                                <div><strong>${t.title}</strong></div>
+                                <div class="section-note">${capName} · Owner: ${t.owner}</div>
+                                <div class="badge-row">
+                                  <span class="badge chip task-status" data-task-id="${t.id}">
+                                    <span class="tag-dot ${cls}"></span>${t.status}
+                                  </span>
+                                  <span class="badge">Phase: ${phase}</span>
+                                  <span class="badge">Impact: ${t.impact}</span>
+                                </div>
+                              </div>
+                            `;
+                          })
+                          .join('')}
+                      </div>
+                    </div>
+                  `;
+                })
+                .join('')}
+            </div>
+
+            <div class="detail-panel" style="margin-top:12px;">
+              <div class="detail-title">Add Task</div>
+              <div class="detail-body">
+                <form id="add-task-form">
+                  <div class="form-row">
+                    <input class="form-input" name="title" placeholder="Task title (e.g., Integrate Falcon with SIEM)" />
+                  </div>
+                  <div class="form-row">
+                    <select class="select-input" name="capabilityId">
+                      ${capabilities
+                        .map(cap => `<option value="${cap.id}">${cap.name}</option>`)
+                        .join('')}
+                    </select>
+                    <select class="select-input" name="phase">
+                      <option value="Foundation">Foundation</option>
+                      <option value="Core">Core</option>
+                      <option value="Optimize">Optimize</option>
+                    </select>
+                    <select class="select-input" name="impact">
+                      <option value="High">High</option>
+                      <option value="Medium">Medium</option>
+                      <option value="Low">Low</option>
+                    </select>
+                  </div>
+                  <div class="form-row">
+                    <input class="form-input" name="owner" placeholder="Owner (optional)" />
+                  </div>
+                  <button type="submit" class="primary-btn">Add Task</button>
+                </form>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-inner">
+            <div class="card-header">
+              <div>
+                <div class="card-title">How to Use This as a Small Team</div>
+                <div class="card-subtitle">You do not need a 50-page strategy doc.</div>
+              </div>
+            </div>
+
+            <div class="detail-panel">
+              <div class="detail-title">Working rhythm</div>
+              <div class="detail-body">
+                <ul style="margin:6px 0 0 18px; padding:0; font-size:0.86rem;">
+                  <li>Pick 3–5 <strong>Foundation</strong> tasks and make those your non-negotiable focus.</li>
+                  <li>Review status weekly as a team and move tasks forward a single notch.</li>
+                  <li>When most Foundation items are Done, pull from <strong>Core</strong>.</li>
+                  <li>Use <strong>Maturity</strong>, <strong>Projects</strong>, and <strong>Metrics</strong> views to show progress to leadership.</li>
+                </ul>
+              </div>
+
+              <div style="margin-top:10px;">
+                <div class="section-title">Capacity guardrail</div>
+                <div class="detail-body">
+                  Small team rule of thumb:
+                  <ul style="margin:6px 0 0 18px; padding:0; font-size:0.86rem;">
+                    <li>1–2 people → <strong>max 3 active tasks</strong> In Progress.</li>
+                    <li>3–5 people → <strong>max 6 active tasks</strong> In Progress.</li>
+                  </ul>
+                  If more than that are In Progress, you&apos;re likely spreading too thin.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    wireTaskStatusClickHandlers(container);
+
+    const addTaskForm = container.querySelector('#add-task-form');
+    if (addTaskForm) {
+      addTaskForm.addEventListener('submit', e => {
+        e.preventDefault();
+        const fd = new FormData(addTaskForm);
+        const title = (fd.get('title') || '').trim();
+        if (!title) return;
+        const capabilityId = fd.get('capabilityId') || capabilities[0]?.id || 'governance';
+        const phase = fd.get('phase') || 'Foundation';
+        const impact = fd.get('impact') || 'Medium';
+        const owner = (fd.get('owner') || '').trim() || 'Unassigned';
+
+        const newTask = {
+          id: 't_custom_' + Date.now(),
+          title,
+          capabilityId,
+          status: 'Not Started',
+          owner,
+          quarter: phase,
+          impact,
+          phase
+        };
+        tasks.push(newTask);
+        saveState();
+        renderView('guided');
+      });
+    }
+  }
+
+  function renderCapabilities(selectedId) {
+    const container = document.getElementById('view-container');
+    const selected =
+      capabilities.find(c => c.id === selectedId) || capabilities[0];
+
+    container.innerHTML = `
+      <div class="grid">
+        <div class="card">
+          <div class="card-inner">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Capability Catalog</div>
+                <div class="card-subtitle">Your mind map, normalized into a structured model.</div>
+              </div>
+              <div class="metric-pill">
+                <span class="tag-dot"></span>
+                ${capabilities.length} capabilities
+              </div>
+            </div>
+
+            <div class="section-note">
+              Click a capability to see details, ownership, maturity, and linked projects.
+            </div>
+
+            <div class="list">
+              ${capabilities
+                .map(
+                  c => `
+                    <div class="list-item capability-item" data-id="${c.id}">
+                      <div><strong>${c.name}</strong></div>
+                      <div class="section-note">${c.domain} · ${c.nist.join(' / ')}</div>
+                      <div class="badge-row">
+                        <span class="badge chip">Maturity ${c.maturity} / 5</span>
+                        <span class="badge">Projects: ${
+                          projects.filter(p => p.capabilityId === c.id).length
+                        }</span>
+                        ${c.tags
+                          .map(tag => `<span class="badge">${tag}</span>`)
+                          .join('')}
+                      </div>
+                    </div>
+                  `
+                )
+                .join('')}
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-inner">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Capability Detail</div>
+                <div class="card-subtitle">Drill into a single slice of the program.</div>
+              </div>
+            </div>
+
+            <div class="detail-panel" id="cap-detail-panel"></div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    function renderDetail(cap) {
+      const panel = document.getElementById('cap-detail-panel');
+      const maturityClass =
+        cap.maturity >= cap.targetMaturity
+          ? 'ok'
+          : cap.maturity >= cap.targetMaturity - 1
+          ? 'warn'
+          : 'bad';
+
+      const relatedTools = tools.filter(t => t.capabilities.includes(cap.id));
+      const relatedTasks = tasks.filter(t => t.capabilityId === cap.id);
+      const relatedProjects = projects.filter(p => p.capabilityId === cap.id);
+      const projMaturity = projectedMaturity(cap);
+
+      panel.innerHTML = `
+        <div class="detail-title">${cap.name}</div>
+        <div class="detail-domain">${cap.domain} · ${cap.nist.join(' / ')}</div>
+        <div class="detail-body">${cap.description}</div>
+
+        <div class="chips-row">
+          <div class="chip-pill em">
+            <span class="tag-dot ${
+              maturityClass === 'bad'
+                ? 'bad'
+                : maturityClass === 'warn'
+                ? 'warn'
+                : ''
+            }"></span>
+            Maturity ${cap.maturity} / ${cap.targetMaturity}
+          </div>
+          <div class="chip-pill">Owner: ${cap.owner}</div>
+          <div class="chip-pill">Horizon: ${cap.timeframe}</div>
+          <div class="chip-pill">Projects: ${relatedProjects.length}</div>
+          <div class="chip-pill">Projected maturity: ${projMaturity} / ${cap.targetMaturity}</div>
+        </div>
+
+        <div class="grid-2" style="margin-top:8px;">
+          <div class="pill-stat">
+            <span class="pill-stat-label">NIST</span>
+            <span class="pill-stat-value">${cap.nist.join(' / ')}</span>
+          </div>
+          <div class="pill-stat">
+            <span class="pill-stat-label">Tags</span>
+            <span class="pill-stat-value">${cap.tags.join(', ')}</span>
+          </div>
+        </div>
+
+        <div style="margin-top:10px;">
+          <div class="section-title">Tools that support this capability</div>
+          <div class="list">
+            ${
+              !relatedTools.length
+                ? '<div class="section-note">No tools mapped yet.</div>'
+                : relatedTools
+                    .map(t => `
+                        <div class="list-item" style="cursor:default">
+                          <div><strong>${t.name}</strong> — ${t.category}</div>
+                          <div class="badge-row">
+                            <span class="badge">Vendor: ${t.vendor}</span>
+                            <span class="badge chip">
+                              Level ${t.currentLevel || 0} / ${t.targetLevel || 3} · ${TOOL_LEVEL_LABELS[t.currentLevel || 0]}
+                            </span>
+                          </div>
+                        </div>
+                    `)
+                    .join('')
+            }
+          </div>
+        </div>
+
+        <div style="margin-top:10px;">
+          <div class="section-title">Related Projects</div>
+          <div class="list">
+            ${
+              !relatedProjects.length
+                ? '<div class="section-note">No projects linked yet.</div>'
+                : relatedProjects
+                    .map(p => {
+                      const status = getProjectStatus(p);
+                      const prog = getProjectProgress(p);
+                      const statusClassName =
+                        status === 'Complete'
+                          ? 'ok'
+                          : status === 'Blocked'
+                          ? 'bad'
+                          : status === 'Active'
+                          ? 'warn'
+                          : '';
+                      return `
+                        <div class="list-item" style="cursor:default">
+                          <div><strong>${p.name}</strong></div>
+                          <div class="section-note">Owner: ${p.owner} · ${p.start} → ${p.target}</div>
+                          <div class="badge-row">
+                            <span class="badge chip">
+                              <span class="tag-dot ${statusClassName}"></span>${status}
+                            </span>
+                            <span class="badge">${prog.done} / ${prog.total || 0} tasks · ${prog.percent}%</span>
+                            <span class="badge">Maturity impact: +${p.maturityImpact}</span>
+                          </div>
+                        </div>
+                      `;
+                    })
+                    .join('')
+            }
+          </div>
+        </div>
+
+        <div style="margin-top:10px;">
+          <div class="section-title">Related Roadmap Items</div>
+          <div class="list">
+            ${
+              !relatedTasks.length
+                ? '<div class="section-note">No items linked yet.</div>'
+                : relatedTasks
+                    .map(
+                      t => `
+                    <div class="list-item" style="cursor:default">
+                      <div>${t.title}</div>
+                      <div class="badge-row">
+                        <span class="badge chip task-status" data-task-id="${t.id}">
+                          <span class="tag-dot ${statusClass(t.status)}"></span>${t.status}
+                        </span>
+                        <span class="badge">Owner: ${t.owner}</span>
+                        <span class="badge">Impact: ${t.impact}</span>
+                        <span class="badge">Phase: ${t.phase}</span>
+                      </div>
+                    </div>
+                    `
+                    )
+                    .join('')
+            }
+          </div>
+        </div>
+      `;
+      wireTaskStatusClickHandlers(panel);
+    }
+
+    container.querySelectorAll('.capability-item').forEach(el => {
+      el.addEventListener('click', () => {
+        const id = el.getAttribute('data-id');
+        const cap = capabilities.find(c => c.id === id);
+        if (cap) renderDetail(cap);
+      });
+    });
+
+    if (selected) renderDetail(selected);
+  }
+
+  function renderMaturity() {
+    const container = document.getElementById('view-container');
+    const sorted = [...capabilities].sort((a, b) => a.maturity - b.maturity);
+
+    container.innerHTML = `
+      <div class="grid">
+        <div class="card">
+          <div class="card-inner">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Maturity by Capability</div>
+                <div class="card-subtitle">Lower-scoring areas bubble to the top.</div>
+              </div>
+            </div>
+
+            <div class="list">
+              ${sorted
+                .map(c => {
+                  const gap = c.targetMaturity - c.maturity;
+                  const className =
+                    gap <= 0 ? 'ok' : gap === 1 ? 'warn' : 'bad';
+                  const tagLabel =
+                    gap <= 0
+                      ? 'At / above target'
+                      : gap === 1
+                      ? 'Near target'
+                      : 'Gap';
+                  const capsProjects = projects.filter(p => p.capabilityId === c.id);
+                  const projMaturity = projectedMaturity(c);
+
+                  return `
+                    <div class="list-item" style="cursor:default">
+                      <div><strong>${c.name}</strong></div>
+                      <div class="section-note">${c.domain} · ${c.nist.join(' / ')}</div>
+                      <div class="badge-row">
+                        <span class="badge chip">
+                          Maturity ${c.maturity} / ${c.targetMaturity}
+                        </span>
+                        <span class="badge">
+                          Gap: ${gap <= 0 ? 0 : gap}
+                        </span>
+                        <span class="badge">
+                          <span class="tag-dot ${className}"></span>${tagLabel}
+                        </span>
+                        <span class="badge">Projects: ${capsProjects.length}</span>
+                        <span class="badge">Projected maturity: ${projMaturity} / ${c.targetMaturity}</span>
+                      </div>
+                    </div>
+                  `;
+                })
+                .join('')}
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-inner">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Assessment Notes</div>
+                <div class="card-subtitle">How to use this view.</div>
+              </div>
+            </div>
+            <div class="detail-panel">
+              <div class="detail-title">0–5 Scale</div>
+              <div class="detail-body">
+                <ul style="margin:6px 0 0 18px; padding:0; font-size:0.86rem;">
+                  <li><strong>0</strong> – Not considered</li>
+                  <li><strong>1</strong> – Ad-hoc / heroic</li>
+                  <li><strong>2</strong> – Repeatable, but informal</li>
+                  <li><strong>3</strong> – Defined & documented</li>
+                  <li><strong>4</strong> – Measured & controlled</li>
+                  <li><strong>5</strong> – Optimized & continuously improved</li>
+                </ul>
+              </div>
+
+              <div style="margin-top:10px;">
+                <div class="section-title">Next Actions</div>
+                <div class="list">
+                  <div class="list-item" style="cursor:default">
+                    <div>Confirm owners for each capability and have them ratify the scores.</div>
+                  </div>
+                  <div class="list-item" style="cursor:default">
+                    <div>Translate the largest gaps into <strong>Projects</strong> with timelines and funding.</div>
+                  </div>
+                  <div class="list-item" style="cursor:default">
+                    <div>Review and refresh scores on a quarterly or semi-annual cadence.</div>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderRoadmap() {
+    const container = document.getElementById('view-container');
+
+    container.innerHTML = `
+      <div class="grid">
+        <div class="card">
+          <div class="card-inner">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Roadmap Board</div>
+                <div class="card-subtitle">Tasks grouped by status and impact.</div>
+              </div>
+            </div>
+
+            <div class="split">
+              <div>
+                <div class="section-title">High Impact</div>
+                <div class="list">
+                  ${tasks
+                    .filter(t => t.impact === 'High')
+                    .map(t => {
+                      const capName = capabilities.find(c => c.id === t.capabilityId)?.name || '';
+                      const cls = statusClass(t.status);
+                      return `
+                        <div class="list-item" style="cursor:default">
+                          <div><strong>${t.title}</strong></div>
+                          <div class="section-note">
+                            ${capName} · Phase: ${t.phase}
+                          </div>
+                          <div class="badge-row">
+                            <span class="badge chip task-status" data-task-id="${t.id}">
+                              <span class="tag-dot ${cls}"></span>${t.status}
+                            </span>
+                            <span class="badge">Owner: ${t.owner}</span>
+                          </div>
+                        </div>
+                      `;
+                    })
+                    .join('')}
+                </div>
+              </div>
+              <div>
+                <div class="section-title">Medium Impact</div>
+                <div class="list">
+                  ${tasks
+                    .filter(t => t.impact === 'Medium')
+                    .map(t => {
+                      const capName = capabilities.find(c => c.id === t.capabilityId)?.name || '';
+                      const cls = statusClass(t.status);
+                      return `
+                        <div class="list-item" style="cursor:default">
+                          <div><strong>${t.title}</strong></div>
+                          <div class="section-note">
+                            ${capName} · Phase: ${t.phase}
+                          </div>
+                          <div class="badge-row">
+                            <span class="badge chip task-status" data-task-id="${t.id}">
+                              <span class="tag-dot ${cls}"></span>${t.status}
+                            </span>
+                            <span class="badge">Owner: ${t.owner}</span>
+                          </div>
+                        </div>
+                      `;
+                    })
+                    .join('')}
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-inner">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Roadmapping Principles</div>
+                <div class="card-subtitle">How this app wants you to think.</div>
+              </div>
+            </div>
+            <div class="detail-panel">
+              <div class="detail-title">From capability gap → funded work</div>
+              <div class="detail-body">
+                <ol style="margin:6px 0 0 18px; padding:0; font-size:0.86rem;">
+                  <li>Rank gaps by impact on risk, operations, and compliance.</li>
+                  <li>Bundle related gaps into investable epics (see <strong>Projects</strong> view).</li>
+                  <li>Attach timelines, owners, and success metrics.</li>
+                  <li>Socialize with business leaders as a portfolio, not one-off tools.</li>
+                </ol>
+              </div>
+
+              <div style="margin-top:10px;">
+                <div class="section-title">Signals to Watch</div>
+                <div class="list">
+                  <div class="list-item" style="cursor:default">
+                    <div>Many "High" impact items stuck in "Not Started" or "Blocked".</div>
+                  </div>
+                  <div class="list-item" style="cursor:default">
+                    <div>Roadmap misaligned with the biggest maturity gaps.</div>
+                  </div>
+                  <div class="list-item" style="cursor:default">
+                    <div>Key items without a named human owner.</div>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    wireTaskStatusClickHandlers(container);
+  }
+
+  function renderTools() {
+    const container = document.getElementById('view-container');
+
+    const underUsed = tools.filter(t => (t.currentLevel || 0) < (t.targetLevel || 3));
+    const fullyUsed = tools.filter(t => (t.currentLevel || 0) >= (t.targetLevel || 3));
+
+    container.innerHTML = `
+      <div class="grid">
+        <div class="card">
+          <div class="card-inner">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Tool Inventory</div>
+                <div class="card-subtitle">Where each tool fits and how it&apos;s used today.</div>
+              </div>
+              <div class="metric-pill">
+                <span class="tag-dot"></span>
+                ${tools.length} tools
+              </div>
+            </div>
+
+            <div class="section-note">
+              Click the adoption level pill to move a tool through: Not in use → Deployed / basic → Use-case driven → Optimized / automated.
+            </div>
+
+            <div class="list">
+              ${tools
+                .map(t => {
+                  const cls = toolLevelClass(t.currentLevel || 0, t.targetLevel || 3);
+                  const mappedCaps = (t.capabilities || [])
+                    .map(id => capabilities.find(c => c.id === id)?.name || id)
+                    .join(', ');
+                  return `
+                    <div class="list-item" data-id="${t.id}">
+                      <div><strong>${t.name}</strong> — ${t.category}</div>
+                      <div class="section-note">
+                        Vendor: ${t.vendor} · Supports: ${mappedCaps || 'Not mapped'}
+                      </div>
+                      <div class="badge-row">
+                        <span class="badge chip tool-level" data-tool-id="${t.id}">
+                          <span class="tag-dot ${cls}"></span>
+                          Level ${t.currentLevel || 0} / ${t.targetLevel || 3} · ${TOOL_LEVEL_LABELS[t.currentLevel || 0]}
+                        </span>
+                        <span class="badge">${underUsed.includes(t) ? 'Under target' : 'At / above target'}</span>
+                      </div>
+                    </div>
+                  `;
+                })
+                .join('')}
+            </div>
+
+            <div class="detail-panel" style="margin-top:12px;">
+              <div class="detail-title">Add Tool</div>
+              <div class="detail-body">
+                <form id="add-tool-form">
+                  <div class="form-row">
+                    <input class="form-input" name="name" placeholder="Tool name (e.g., CrowdStrike Falcon)" />
+                  </div>
+                  <div class="form-row">
+                    <input class="form-input" name="vendor" placeholder="Vendor (e.g., CrowdStrike)" />
+                    <input class="form-input" name="category" placeholder="Category (e.g., EDR / XDR)" />
+                  </div>
+                  <div class="form-row">
+                    <select class="select-input" name="targetLevel">
+                      <option value="3" selected>Target level: 3 (Optimized / automated)</option>
+                      <option value="2">Target level: 2 (Use-case driven)</option>
+                      <option value="1">Target level: 1 (Deployed / basic)</option>
+                    </select>
+                  </div>
+                  <div class="section-note" style="margin-top:6px;">Capabilities this tool supports:</div>
+                  <div class="chips-row">
+                    ${capabilities
+                      .map(
+                        cap => `
+                          <label class="chip-pill">
+                            <input type="checkbox" name="capability" value="${cap.id}" style="margin-right:4px;" />
+                            ${cap.name}
+                          </label>
+                        `
+                      )
+                      .join('')}
+                  </div>
+                  <button type="submit" class="primary-btn">Add Tool</button>
+                </form>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-inner">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Tool Landscape Summary</div>
+                <div class="card-subtitle">Where your stack is under-leveraged.</div>
+              </div>
+            </div>
+
+            <div class="detail-panel">
+              <div class="detail-title">At a glance</div>
+              <div class="grid-2">
+                <div class="pill-stat">
+                  <span class="pill-stat-label">Under-used tools</span>
+                  <span class="pill-stat-value ${underUsed.length ? 'warn' : 'ok'}">${underUsed.length}</span>
+                </div>
+                <div class="pill-stat">
+                  <span class="pill-stat-label">At / above target</span>
+                  <span class="pill-stat-value ok">${fullyUsed.length}</span>
+                </div>
+              </div>
+
+              <div style="margin-top:10px;">
+                <div class="section-title">Questions to ask</div>
+                <div class="detail-body">
+                  <ul style="margin:6px 0 0 18px; padding:0; font-size:0.86rem;">
+                    <li>Do we have tools that overlap heavily but aren&apos;t fully used?</li>
+                    <li>Which tools matter most for our top 3 risks this year?</li>
+                    <li>Are there &quot;zombie&quot; tools we could retire and reinvest the budget?</li>
+                    <li>Are platform features (SOAR, UEBA, CSPM) turned on and tied to real workflows?</li>
+                  </ul>
+                </div>
+              </div>
+
+              <div style="margin-top:10px;">
+                <div class="section-title">Maturity theme</div>
+                <div class="detail-body">
+                  The goal is not &quot;more tools&quot;; it&apos;s <strong>fewer, better-used tools</strong> that plug into your
+                  capabilities and roadmap. Use this view to pick <em>one or two</em> platforms to lean into each quarter.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    wireToolLevelClickHandlers(container);
+
+    const addToolForm = container.querySelector('#add-tool-form');
+    if (addToolForm) {
+      addToolForm.addEventListener('submit', e => {
+        e.preventDefault();
+        const fd = new FormData(addToolForm);
+        const name = (fd.get('name') || '').trim();
+        if (!name) return;
+        const vendor = (fd.get('vendor') || 'Unknown').trim() || 'Unknown';
+        const category = (fd.get('category') || 'Other').trim() || 'Other';
+        const targetLevel = parseInt(fd.get('targetLevel') || '3', 10) || 3;
+        const caps = fd.getAll('capability');
+
+        const newTool = {
+          id: 'tool_custom_' + Date.now(),
+          name,
+          vendor,
+          category,
+          capabilities: caps,
+          currentLevel: 0,
+          targetLevel,
+          currentUse: [],
+          potentialUse: []
+        };
+        tools.push(newTool);
+        saveState();
+        renderView('tools');
+      });
+    }
+  }
+
+  function renderHeatmap() {
+    const container = document.getElementById('view-container');
+
+    container.innerHTML = `
+      <div class="grid">
+        <div class="card">
+          <div class="card-inner">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Tool × Capability Heatmap</div>
+                <div class="card-subtitle">Which tools back which capabilities, and how strongly.</div>
+              </div>
+            </div>
+
+            <div class="section-note">
+              Colors indicate how mature the tool is in that capability, based on the adoption level you set in <strong>Tools & Platforms</strong>.
+            </div>
+
+            <div class="heatmap-wrapper">
+              <table class="heatmap">
+                <thead>
+                  <tr>
+                    <th>Capability</th>
+                    ${tools
+                      .map(
+                        t =>
+                          `<th title="${t.vendor} • ${t.category}">${t.name}</th>`
+                      )
+                      .join('')}
+                  </tr>
+                </thead>
+                <tbody>
+                  ${capabilities
+                    .map(cap => {
+                      return `
+                        <tr>
+                          <td>${cap.name}</td>
+                          ${tools
+                            .map(tool => {
+                              const cls = heatmapCellClass(tool, cap.id);
+                              const label = (tool.capabilities || []).includes(cap.id)
+                                ? `L${tool.currentLevel || 0}`
+                                : '';
+                              return `<td class="${cls}">${label}</td>`;
+                            })
+                            .join('')}
+                        </tr>
+                      `;
+                    })
+                    .join('')}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-inner">
+            <div class="card-header">
+              <div>
+                <div class="card-title">How to Read This</div>
+                <div class="card-subtitle">From &quot;tool zoo&quot; → coherent platform strategy.</div>
+              </div>
+            </div>
+
+            <div class="detail-panel">
+              <div class="detail-title">Legend</div>
+              <div class="detail-body">
+                <ul style="margin:6px 0 0 18px; padding:0; font-size:0.86rem;">
+                  <li><span class="badge heatmap-cell-none" style="border:none;">&nbsp;&nbsp;&nbsp;</span> — No relationship or not in use.</li>
+                  <li><span class="badge heatmap-cell-low" style="border:none;">&nbsp;&nbsp;&nbsp;</span> — Level 1: Deployed / basic usage.</li>
+                  <li><span class="badge heatmap-cell-med" style="border:none;">&nbsp;&nbsp;&nbsp;</span> — Level 2: Use-case driven.</li>
+                  <li><span class="badge heatmap-cell-high" style="border:none;">&nbsp;&nbsp;&nbsp;</span> — Level 3: Optimized / automated.</li>
+                </ul>
+              </div>
+
+              <div style="margin-top:10px;">
+                <div class="section-title">Patterns to look for</div>
+                <div class="detail-body">
+                  <ul style="margin:6px 0 0 18px; padding:0; font-size:0.86rem;">
+                    <li>Rows with few or no colored cells → capabilities that lack tool support.</li>
+                    <li>Columns with many colored cells → strategic platforms; consider doubling down.</li>
+                    <li>Tools with scattered low-level coverage → candidates for consolidation or targeted uplift.</li>
+                  </ul>
+                </div>
+              </div>
+
+              <div style="margin-top:10px;">
+                <div class="section-title">Next moves</div>
+                <div class="detail-body">
+                  Use this heatmap in planning:
+                  <ul style="margin:6px 0 0 18px; padding:0; font-size:0.86rem;">
+                    <li>Pick one strategic platform per year to push from Level 1 → 3 for its key capabilities.</li>
+                    <li>Align your <strong>Roadmap</strong> and <strong>Projects</strong> to turn &quot;low&quot; cells into &quot;med&quot; / &quot;high&quot; on your top risks.</li>
+                  </ul>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderSkills() {
+    const container = document.getElementById('view-container');
+
+    container.innerHTML = `
+      <div class="grid">
+        <div class="card">
+          <div class="card-inner">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Team Skills Matrix</div>
+                <div class="card-subtitle">Coverage across critical domains.</div>
+              </div>
+            </div>
+
+            <div class="list">
+              ${skills
+                .map(s => {
+                  const gap = s.target - s.level;
+                  const className =
+                    gap <= 0 ? 'ok' : gap === 1 ? 'warn' : 'bad';
+                  const statusLabel =
+                    gap <= 0
+                      ? 'Target met'
+                      : gap === 1
+                      ? 'Near target'
+                      : 'Gap';
+
+                  return `
+                    <div class="list-item" style="cursor:default">
+                      <div><strong>${s.person}</strong> — ${s.skill}</div>
+                      <div class="badge-row">
+                        <span class="badge chip">
+                          Level ${s.level} / ${s.target}
+                        </span>
+                        <span class="badge">
+                          <span class="tag-dot ${className}"></span>${statusLabel}
+                        </span>
+                      </div>
+                    </div>
+                  `;
+                })
+                .join('')}
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-inner">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Coverage Highlights</div>
+                <div class="card-subtitle">Where to invest training and hiring.</div>
+              </div>
+            </div>
+
+            <div class="detail-panel">
+              <div class="detail-title">Gaps worth watching</div>
+              <div class="detail-body">
+                <ul style="margin:6px 0 0 18px; padding:0; font-size:0.86rem;">
+                  <li>AI / GenAI strategy and guardrails.</li>
+                  <li>OT / ICS security depth for critical environments.</li>
+                  <li>Cloud security engineering, especially for multi-cloud.</li>
+                  <li>Crisis communications and cross-business incident leadership.</li>
+                </ul>
+              </div>
+
+              <div style="margin-top:10px;">
+                <div class="section-title">Actions</div>
+                <div class="list">
+                  <div class="list-item" style="cursor:default">
+                    <div>Turn the biggest skill gaps into targeted learning paths or hiring plans.</div>
+                  </div>
+                  <div class="list-item" style="cursor:default">
+                    <div>Pair junior staff with senior leads via structured shadowing in IR, threat detection, and cloud.</div>
+                  </div>
+                  <div class="list-item" style="cursor:default">
+                    <div>Run a quarterly skills review alongside your maturity assessment.</div>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderIR() {
+    const container = document.getElementById('view-container');
+
+    container.innerHTML = `
+      <div class="grid">
+        <div class="card">
+          <div class="card-inner">
+            <div class="card-header">
+              <div>
+                <div class="card-title">IR Playbooks</div>
+                <div class="card-subtitle">Key scenarios and their test cadence.</div>
+              </div>
+            </div>
+
+            <div class="list">
+              ${irPlaybooks
+                .map(pb => {
+                  const statusClassName =
+                    pb.status === 'Healthy'
+                      ? 'ok'
+                      : pb.status === 'Needs Retest'
+                      ? 'warn'
+                      : 'bad';
+
+                  return `
+                    <div class="list-item" style="cursor:default">
+                      <div><strong>${pb.name}</strong></div>
+                      <div class="section-note">Owner: ${pb.owner}</div>
+                      <div class="badge-row">
+                        <span class="badge chip">
+                          <span class="tag-dot ${statusClassName}"></span>${pb.status}
+                        </span>
+                        <span class="badge">Last tested: ${pb.lastTested}</span>
+                      </div>
+                    </div>
+                  `;
+                })
+                .join('')}
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-inner">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Readiness Checklist</div>
+                <div class="card-subtitle">Before the next big incident.</div>
+              </div>
+            </div>
+
+            <div class="detail-panel">
+              <div class="detail-title">Questions to answer</div>
+              <div class="detail-body">
+                <ul style="margin:6px 0 0 18px; padding:0; font-size:0.86rem;">
+                  <li>Do we know who leads which scenario, by name, not title?</li>
+                  <li>When was the last time we rehearsed with business and comms, not just security?</li>
+                  <li>Do we have pre-approved comms templates for regulators, customers, and staff?</li>
+                  <li>Have we run at least one cross-domain scenario (e.g., ransomware + OT impact)?</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderMetrics() {
+    const container = document.getElementById('view-container');
+
+    container.innerHTML = `
+      <div class="grid">
+        <div class="card">
+          <div class="card-inner">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Key Security Metrics</div>
+                <div class="card-subtitle">Blend operational and executive views.</div>
+              </div>
+            </div>
+
+            <div class="list">
+              ${metrics
+                .map(m => {
+                  const statusClassName =
+                    m.trend === 'improving'
+                      ? 'ok'
+                      : m.trend === 'steady'
+                      ? 'warn'
+                      : 'bad';
+                  const label =
+                    m.trend === 'improving'
+                      ? 'Improving'
+                      : m.trend === 'steady'
+                      ? 'Flat'
+                      : 'Needs attention';
+                  return `
+                    <div class="list-item" style="cursor:default">
+                      <div><strong>${m.name}</strong></div>
+                      <div class="badge-row">
+                        <span class="badge chip">${m.value}</span>
+                        <span class="badge">
+                          <span class="tag-dot ${statusClassName}"></span>${label}
+                        </span>
+                      </div>
+                    </div>
+                  `;
+                })
+                .join('')}
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-inner">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Metric Design</div>
+                <div class="card-subtitle">Avoid vanity metrics; aim for decisions.</div>
+              </div>
+            </div>
+
+            <div class="detail-panel">
+              <div class="detail-title">Good metrics usually...</div>
+              <div class="detail-body">
+                <ul style="margin:6px 0 0 18px; padding:0; font-size:0.86rem;">
+                  <li>Are tied to a capability (e.g., SIEM, IR, cloud security).</li>
+                  <li>Lead to a decision if the number moves in the wrong direction.</li>
+                  <li>Have a clearly defined owner and data source.</li>
+                  <li>Are stable over time so you can show progress to executives.</li>
+                </ul>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderProjects() {
+    const container = document.getElementById('view-container');
+
+    container.innerHTML = `
+      <div class="grid">
+        <div class="card">
+          <div class="card-inner">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Project Portfolio</div>
+                <div class="card-subtitle">Epics that move capability maturity.</div>
+              </div>
+              <div class="metric-pill">
+                <span class="tag-dot"></span>
+                ${projects.length} projects
+              </div>
+            </div>
+
+            <div class="section-note">
+              Each project ties to a capability and set of tasks. As tasks move to Done, project progress updates automatically.
+            </div>
+
+            <div class="list">
+              ${projects
+                .map(p => {
+                  const cap = capabilities.find(c => c.id === p.capabilityId);
+                  const capName = cap ? cap.name : p.capabilityId;
+                  const status = getProjectStatus(p);
+                  const prog = getProjectProgress(p);
+                  const projected = cap ? projectedMaturity(cap) : null;
+
+                  const statusClassName =
+                    status === 'Complete'
+                      ? 'ok'
+                      : status === 'Blocked'
+                      ? 'bad'
+                      : status === 'Active'
+                      ? 'warn'
+                      : '';
+
+                  return `
+                    <div class="list-item" style="cursor:default">
+                      <div><strong>${p.name}</strong></div>
+                      <div class="section-note">${capName} · Owner: ${p.owner}</div>
+                      <div class="badge-row">
+                        <span class="badge chip">
+                          <span class="tag-dot ${statusClassName}"></span>${status}
+                        </span>
+                        <span class="badge">
+                          ${prog.done} / ${prog.total || 0} tasks · ${prog.percent}%
+                        </span>
+                        ${
+                          projected != null
+                            ? `<span class="badge">Maturity: ${cap.maturity} → ${projected}</span>`
+                            : ''
+                        }
+                        <span class="badge">Timeline: ${p.start} → ${p.target}</span>
+                      </div>
+                      ${
+                        p.notes
+                          ? `<div class="section-note" style="margin-top:4px;">${p.notes}</div>`
+                          : ''
+                      }
+                      <div style="margin-top:6px; width:100%; background:rgba(15,23,42,0.95); border-radius:999px; border:1px solid rgba(31,41,55,0.9); overflow:hidden;">
+                        <div style="height:6px; width:${prog.percent}%; max-width:100%; background:linear-gradient(to right,#0ea5e9,#22c55e);"></div>
+                      </div>
+                    </div>
+                  `;
+                })
+                .join('')}
+            </div>
+
+            <div class="detail-panel" style="margin-top:12px;">
+              <div class="detail-title">Add Project</div>
+              <div class="detail-body">
+                <form id="add-project-form">
+                  <div class="form-row">
+                    <input class="form-input" name="name" placeholder="Project name (e.g., Threat Detection 2.0)" />
+                  </div>
+                  <div class="form-row">
+                    <select class="select-input" name="capabilityId">
+                      ${capabilities
+                        .map(cap => `<option value="${cap.id}">${cap.name}</option>`)
+                        .join('')}
+                    </select>
+                    <input class="form-input" name="owner" placeholder="Owner (e.g., SOC Lead)" />
+                  </div>
+                  <div class="form-row">
+                    <input class="form-input" name="start" placeholder="Start date (YYYY-MM-DD)" />
+                    <input class="form-input" name="target" placeholder="Target date (YYYY-MM-DD)" />
+                    <input class="form-input" name="impact" placeholder="Maturity impact (e.g., 1 or 2)" />
+                  </div>
+                  <div class="section-note" style="margin-top:6px;">Link tasks to this project:</div>
+                  <div class="chips-row" style="max-height:120px; overflow:auto; padding:4px 0;">
+                    ${tasks
+                      .map(
+                        t => `
+                          <label class="chip-pill">
+                            <input type="checkbox" name="taskId" value="${t.id}" style="margin-right:4px;" />
+                            ${t.title}
+                          </label>
+                        `
+                      )
+                      .join('')}
+                  </div>
+                  <button type="submit" class="primary-btn">Add Project</button>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-inner">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Timeline & Maturity</div>
+                <div class="card-subtitle">Rough view of when projects land and what they move.</div>
+              </div>
+            </div>
+
+            <div class="detail-panel">
+              <div class="detail-title">Project Timeline (simple)</div>
+              <div class="detail-body">
+                ${
+                  !projects.length
+                    ? '<div class="section-note">No projects yet. Add one on the left.</div>'
+                    : projects
+                        .map(p => {
+                          const status = getProjectStatus(p);
+                          const statusClassName =
+                            status === 'Complete'
+                              ? 'ok'
+                              : status === 'Blocked'
+                              ? 'bad'
+                              : status === 'Active'
+                              ? 'warn'
+                              : '';
+                          return `
+                            <div style="margin-top:6px;">
+                              <div style="font-size:0.8rem; color:var(--muted); margin-bottom:2px;">
+                                <strong>${p.name}</strong> · <span class="tag-dot ${statusClassName}"></span>${status}
+                              </div>
+                              <div style="height:10px; border-radius:999px; background:rgba(15,23,42,0.95); border:1px solid rgba(31,41,55,0.9); overflow:hidden;">
+                                <div style="height:100%; width:70%; background:linear-gradient(to right,#0ea5e9,#6366f1);"></div>
+                              </div>
+                              <div style="font-size:0.7rem; color:var(--muted); margin-top:2px;">
+                                ${p.start} → ${p.target}
+                              </div>
+                            </div>
+                          `;
+                        })
+                        .join('')
+                }
+              </div>
+
+              <div style="margin-top:10px;">
+                <div class="section-title">How this helps you</div>
+                <div class="detail-body">
+                  <ul style="margin:6px 0 0 18px; padding:0; font-size:0.86rem;">
+                    <li>Group your tasks into 2–5 named projects instead of dozens of one-offs.</li>
+                    <li>Use project maturity impact to show leadership how work ties to capabilities.</li>
+                    <li>You don&apos;t need ServiceNow: this is your lightweight, local project board.</li>
+                    <li>If you <em>do</em> have ServiceNow, you can mirror projects/epics there but keep this app as your security-specific lens.</li>
+                  </ul>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const addProjectForm = container.querySelector('#add-project-form');
+    if (addProjectForm) {
+      addProjectForm.addEventListener('submit', e => {
+        e.preventDefault();
+        const fd = new FormData(addProjectForm);
+
+        const name = (fd.get('name') || '').trim();
+        if (!name) return;
+
+        const capabilityId = fd.get('capabilityId') || capabilities[0]?.id || 'governance';
+        const owner = (fd.get('owner') || '').trim() || 'Unassigned';
+        const start = (fd.get('start') || '').trim() || '2025-01-01';
+        const target = (fd.get('target') || '').trim() || '2025-12-31';
+        const impact = parseInt(fd.get('impact') || '1', 10) || 1;
+        const taskIds = fd.getAll('taskId');
+
+        const newProj = {
+          id: 'proj_custom_' + Date.now(),
+          name,
+          capabilityId,
+          owner,
+          start,
+          target,
+          maturityImpact: impact,
+          taskIds,
+          notes: ''
+        };
+
+        projects.push(newProj);
+        saveState();
+        renderView('projects');
+      });
+    }
+  }
+
+  // ---------- Shared wiring helpers ------------------
+
+  function wireTaskStatusClickHandlers(rootEl) {
+    rootEl.querySelectorAll('.task-status').forEach(el => {
+      el.addEventListener('click', () => {
+        const id = el.getAttribute('data-task-id');
+        cycleStatus(id);
+        const currentView =
+          document.querySelector('.nav-item.active')?.dataset.view || 'overview';
+        renderView(currentView);
+      });
+    });
+  }
+
+  function wireToolLevelClickHandlers(rootEl) {
+    rootEl.querySelectorAll('.tool-level').forEach(el => {
+      el.addEventListener('click', () => {
+        const id = el.getAttribute('data-tool-id');
+        cycleToolLevel(id);
+        const currentView =
+          document.querySelector('.nav-item.active')?.dataset.view || 'tools';
+        renderView(currentView);
+      });
+    });
+  }
+
+  function renderView(viewKey, extra) {
+    setHeader(viewKey);
+    switch (viewKey) {
+      case 'overview':
+        renderOverview();
+        break;
+      case 'guided':
+        renderGuidedPlan();
+        break;
+      case 'capabilities':
+        renderCapabilities(extra);
+        break;
+      case 'maturity':
+        renderMaturity();
+        break;
+      case 'projects':
+        renderProjects();
+        break;
+      case 'roadmap':
+        renderRoadmap();
+        break;
+      case 'tools':
+        renderTools();
+        break;
+      case 'heatmap':
+        renderHeatmap();
+        break;
+      case 'skills':
+        renderSkills();
+        break;
+      case 'ir':
+        renderIR();
+        break;
+      case 'metrics':
+        renderMetrics();
+        break;
+      default:
+        renderOverview();
+    }
+  }
+
+  // ---------- Nav wiring + initial render ------------------
+
+  document.querySelectorAll('.nav-item').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const view = btn.dataset.view;
+      renderView(view);
+    });
+  });
+
+  renderView('overview');
+</script>
+</body>
+</html>
