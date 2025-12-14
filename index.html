@@ -690,6 +690,30 @@
     .search-item-title{font-weight:600;font-size:.86rem}
     .search-item-sub{font-size:.75rem;color:var(--muted);margin-top:2px}
     .search-kbd{font-size:.7rem;color:var(--muted);border:1px solid rgba(148,163,184,.35);border-radius:8px;padding:2px 6px}
+
+  /* Playbook drawer */
+  .playbook-drawer{
+    position:fixed; top:0; right:0; height:100vh; width:min(420px, 92vw);
+    background:rgba(2,6,23,.92);
+    border-left:1px solid rgba(30,64,175,.75);
+    box-shadow:-18px 0 50px rgba(0,0,0,.6);
+    transform:translateX(110%);
+    transition:transform .22s ease;
+    z-index:9999;
+    backdrop-filter: blur(10px);
+  }
+  .playbook-drawer.open{ transform:translateX(0); }
+  .playbook-drawer-inner{ height:100%; display:flex; flex-direction:column; padding:14px; gap:10px; }
+  .playbook-drawer-header{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px; padding-bottom:8px; border-bottom:1px solid rgba(148,163,184,.15); }
+  .playbook-drawer-title{ font-weight:700; font-size:1.02rem; }
+  .playbook-drawer-sub{ color:var(--muted); font-size:.78rem; text-transform:uppercase; letter-spacing:.14em; margin-top:2px; }
+  .playbook-drawer-body{ overflow:auto; padding-right:4px; }
+  .playbook-drawer-footer{ display:flex; gap:8px; justify-content:flex-end; border-top:1px solid rgba(148,163,184,.15); padding-top:10px; }
+  .playbook-card{ background:rgba(15,23,42,.9); border:1px solid rgba(31,41,55,.9); border-radius:var(--radius-lg); padding:10px; margin-bottom:10px; }
+  .playbook-card h4{ margin:0 0 6px 0; font-size:.82rem; text-transform:uppercase; letter-spacing:.14em; color:var(--muted); }
+  .playbook-card ul{ margin:6px 0 0 18px; padding:0; }
+  .playbook-linkrow{ display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+
 </style>
 </head>
 <body>
@@ -752,7 +776,15 @@
           </span>
           <span class="nav-tag">Work</span>
         </button>
-      </div>
+      
+        <button class="nav-item" data-view="playbook">
+          <span class="nav-pill-label">
+            <span class="nav-dot"></span>
+            <span>Program Playbook</span>
+          </span>
+          <span class="nav-tag">Ops</span>
+        </button>
+</div>
 
       <div class="nav-section-title">Tools & Ops</div>
       <div class="nav-list">
@@ -833,6 +865,8 @@
           <div id="search-dropdown" class="search-dropdown" aria-label="Search results"></div>
         </div>
         <span class="search-kbd">/</span>
+        <button id="playbook-toggle" class="mini-btn" type="button" title="Toggle Playbook (Shift+P)">📘 Playbook</button>
+
       </div>
     </header>
 
@@ -2744,7 +2778,12 @@ seedDefaultToolCapabilitiesIfEmpty();
         bc: 'PROGRAM ▸ ROADMAP',
         title: 'Roadmap',
         sub: 'From gaps to funded, prioritized work.'
+      },      playbook: {
+        bc: 'PROGRAM ▸ PLAYBOOK',
+        title: 'Program Playbook',
+        sub: 'Start-to-finish operating guide (CISSP-informed) mapped into capabilities, work, and outcomes.'
       },
+
       tools: {
         bc: 'OPS ▸ TOOLS',
         title: 'Tools & Platforms',
@@ -5614,7 +5653,230 @@ Not mapped yet`);
   let currentView = 'overview';
   let currentSelectedId = null;
 
-  function renderView(viewKey, extra) {
+  
+/* =========================
+   PLAYBOOK (full view + reference drawer)
+========================= */
+
+function getWeeklyUpdateText() {
+  const focusCapability = [...capabilities]
+    .sort((a,b)=> ((b.targetMaturity||0)-(b.maturity||0)) - ((a.targetMaturity||0)-(a.maturity||0)) )[0] || null;
+
+  // Prefer tasks that are in progress, then next suggested tasks
+  const inProgress = tasks.filter(t => t.status === 'In Progress').slice(0, 3);
+  const notStarted = tasks.filter(t => t.status === 'Not Started').slice(0, 5);
+  const blockers = tasks.filter(t => t.status === 'Blocked').slice(0, 5);
+  const oneMetric = metrics?.[0]?.name ? `${metrics[0].name}: ${metrics[0].value}` : null;
+
+  const lines = [
+    `Weekly InfoSec Update`,
+    focusCapability ? `Focus capability: ${focusCapability.name} (${focusCapability.maturity}/5 → ${focusCapability.targetMaturity}/5)` : null,
+    oneMetric ? `Metric: ${oneMetric}` : null,
+    inProgress.length ? `In progress: ${inProgress.map(t=>t.title).join(' | ')}` : 'In progress: —',
+    blockers.length ? `Blockers: ${blockers.map(t=>t.title).join(' | ')}` : `Blockers: None`,
+    `Next: ${notStarted.map(t=>t.title).slice(0,3).join(' | ') || '—'}`
+  ].filter(Boolean);
+
+  return lines.join('\n');
+}
+
+function buildPlaybookDrawerHTML() {
+  const focusCapability = [...capabilities]
+    .sort((a,b)=> ((b.targetMaturity||0)-(b.maturity||0)) - ((a.targetMaturity||0)-(a.maturity||0)) )[0] || null;
+
+  const unmappedTasks = tasks.filter(t => !t.capabilityId).length;
+  const staleCaps = capabilities
+    .filter(c => !c.lastReviewed || (new Date(c.lastReviewed).toString() !== 'Invalid Date' && (Date.now() - new Date(c.lastReviewed).getTime()) > (1000*60*60*24*180)))
+    .slice(0, 5);
+
+  return `
+    <div class="playbook-card">
+      <h4>Principles</h4>
+      <ul>
+        <li><strong>Capability-first:</strong> mature capabilities, then decide tools/projects.</li>
+        <li><strong>Maturity is behavior:</strong> repeatability, coverage, operational use — not licenses.</li>
+        <li><strong>Work maps to outcomes:</strong> Tasks → Projects → Capabilities → Domains.</li>
+      </ul>
+      <div class="playbook-linkrow">
+        <button class="mini-btn" type="button" data-pb-jump="capabilities">Open Capabilities</button>
+        <button class="mini-btn" type="button" data-pb-jump="projects">Open Projects</button>
+        <button class="mini-btn" type="button" data-pb-jump="roadmap">Open Roadmap</button>
+      </div>
+      ${unmappedTasks ? `<div class="section-note" style="margin-top:8px;color:#fca5a5;">${unmappedTasks} task(s) are not mapped to a capability.</div>` : ''}
+    </div>
+
+    <div class="playbook-card">
+      <h4>Operating Cadence</h4>
+      <ul>
+        <li><strong>Weekly:</strong> pick 1 focus capability, start 1–3 tasks, remove blockers, post an update.</li>
+        <li><strong>Monthly:</strong> review capability + tool-cap maturity, project health, metrics usefulness.</li>
+        <li><strong>Quarterly:</strong> refresh maturity scores + targets, run tabletop/DR exercises.</li>
+      </ul>
+      <div class="playbook-linkrow">
+        <button class="mini-btn" type="button" data-pb-jump="overview">Go to Weekly Ops</button>
+        <button class="mini-btn" type="button" data-pb-jump="metrics">Metrics</button>
+      </div>
+    </div>
+
+    <div class="playbook-card">
+      <h4>Right Now</h4>
+      <div class="detail-body">
+        ${focusCapability ? `<div><strong>Focus capability:</strong> ${escapeHtml(focusCapability.name)} (${focusCapability.maturity}/5 → ${focusCapability.targetMaturity}/5)</div>` : '<div><strong>Focus capability:</strong> —</div>'}
+        <div style="margin-top:6px;"><strong>Blockers:</strong> ${tasks.filter(t=>t.status==='Blocked').map(t=>escapeHtml(t.title)).slice(0,3).join('<br/>') || 'None'}</div>
+      </div>
+      <div class="playbook-linkrow">
+        ${focusCapability ? `<button class="mini-btn" type="button" data-pb-open-cap="${focusCapability.id}">Open capability</button>` : ''}
+        <button class="mini-btn" type="button" data-pb-jump="heatmap">Heatmap</button>
+      </div>
+    </div>
+
+    <div class="playbook-card">
+      <h4>Maintenance Signals</h4>
+      <div class="section-note">Capabilities not reviewed recently</div>
+      <ul>
+        ${staleCaps.length ? staleCaps.map(c=>`<li><button class="action-link" type="button" data-pb-open-cap="${c.id}">${escapeHtml(c.name)}</button></li>`).join('') : '<li>None</li>'}
+      </ul>
+    </div>
+  `;
+}
+
+function renderPlaybook() {
+  const container = document.getElementById('view-container');
+
+  container.innerHTML = `
+    <div class="grid">
+      <div class="card"><div class="card-inner">
+        <div class="card-header">
+          <div>
+            <div class="card-title">InfoSec Program Playbook</div>
+            <div class="card-subtitle">Start-to-finish guide mapped into capabilities, work, and outcomes.</div>
+          </div>
+          <div class="metric-pill"><span class="tag-dot"></span>Live-linked</div>
+        </div>
+
+        <div class="detail-panel">
+          <div class="detail-title">Program Principles</div>
+          <div class="detail-body">
+            <ul style="margin:6px 0 0 18px;padding:0;">
+              <li><strong>Capability-first:</strong> manage capabilities first, then decide tools/projects.</li>
+              <li><strong>Maturity is behavior:</strong> repeatability, coverage, and operational use (not ownership).</li>
+              <li><strong>Work maps to outcomes:</strong> tasks → projects → capabilities → domains → executive outcomes.</li>
+              <li><strong>Use a consistent 0–5 scale:</strong> so assessments are comparable over time.</li>
+            </ul>
+          </div>
+          <div class="playbook-linkrow">
+            <button class="mini-btn" type="button" data-pb-jump="overview">Open Outcomes Overview</button>
+            <button class="mini-btn" type="button" data-pb-jump="heatmap">Open Heatmap</button>
+            <button class="mini-btn" type="button" data-pb-jump="tools">Open Tools & Platforms</button>
+          </div>
+        </div>
+
+        <div class="detail-panel" style="margin-top:10px;">
+          <div class="detail-title">Phases</div>
+          <div class="detail-body">
+            <div><strong>Foundation:</strong> charter, governance bones, baseline prevention, logging + IR minimum.</div>
+            <div style="margin-top:6px;"><strong>Core:</strong> stabilize workflows, cadence, core processes, manage tools to outcomes.</div>
+            <div style="margin-top:6px;"><strong>Optimize:</strong> automation, advanced detection/hunting, architecture evolution, emerging tech.</div>
+          </div>
+          <div class="playbook-linkrow">
+            <button class="mini-btn" type="button" data-pb-jump="guided">Guided Plan (optional)</button>
+            <button class="mini-btn" type="button" data-pb-jump="roadmap">Roadmap</button>
+          </div>
+        </div>
+
+        <div class="detail-panel" style="margin-top:10px;">
+          <div class="detail-title">Operating Cadences</div>
+          <div class="detail-body">
+            <ul style="margin:6px 0 0 18px;padding:0;">
+              <li><strong>Weekly:</strong> pick 1 focus capability, start 1–3 tasks, remove blockers, publish an update.</li>
+              <li><strong>Monthly:</strong> review maturity, tool-cap maturity, project health, and metric usefulness.</li>
+              <li><strong>Quarterly:</strong> refresh maturity targets, run tabletop/DR exercises, re-prioritize roadmap.</li>
+            </ul>
+          </div>
+          <div class="playbook-linkrow">
+            <button class="mini-btn" type="button" id="pb-copy-weekly-full">Copy Weekly Update</button>
+            <button class="mini-btn" type="button" data-pb-jump="projects">Projects</button>
+            <button class="mini-btn" type="button" data-pb-jump="metrics">Metrics</button>
+          </div>
+        </div>
+
+      </div></div>
+
+      <div class="card"><div class="card-inner">
+        <div class="card-header">
+          <div>
+            <div class="card-title">How to Run This in InfoSec Navigator</div>
+            <div class="card-subtitle">Practical mapping of the playbook into the app.</div>
+          </div>
+        </div>
+
+        <div class="detail-panel">
+          <ol style="margin:6px 0 0 18px;padding:0;line-height:1.55;">
+            <li><strong>Confirm capabilities:</strong> names, owners, targets, domain mapping.</li>
+            <li><strong>Map tools to capabilities:</strong> create Tool × Capability rows and score maturity honestly.</li>
+            <li><strong>Use the heatmap:</strong> find gaps and under-used areas before buying anything new.</li>
+            <li><strong>Convert gaps to work:</strong> projects for funding/timelines, tasks for execution.</li>
+            <li><strong>Weekly Ops:</strong> pick focus, start 1–3 tasks, remove blockers, copy the update.</li>
+            <li><strong>Outcome overview:</strong> show leadership progress by domain and risk reduction.</li>
+          </ol>
+
+          <div class="playbook-linkrow">
+            <button class="mini-btn" type="button" data-pb-jump="capabilities">Capabilities</button>
+            <button class="mini-btn" type="button" data-pb-jump="tools">Tools</button>
+            <button class="mini-btn" type="button" data-pb-jump="heatmap">Heatmap</button>
+            <button class="mini-btn" type="button" data-pb-jump="roadmap">Roadmap</button>
+          </div>
+        </div>
+
+      </div></div>
+    </div>
+  `;
+
+  // Wire up buttons
+  container.querySelectorAll('[data-pb-jump]').forEach(btn=>{
+    btn.addEventListener('click', ()=> renderView(btn.getAttribute('data-pb-jump')));
+  });
+  container.querySelectorAll('[data-pb-open-cap]').forEach(btn=>{
+    btn.addEventListener('click', ()=> renderView('capabilities', btn.getAttribute('data-pb-open-cap')));
+  });
+  const copyBtn = container.querySelector('#pb-copy-weekly-full');
+  copyBtn?.addEventListener('click', ()=>{
+    navigator.clipboard?.writeText(getWeeklyUpdateText());
+    toast('Copied weekly update');
+  });
+}
+
+function setPlaybookDrawerOpen(open) {
+  const el = document.getElementById('playbook-drawer');
+  if(!el) return;
+  el.classList.toggle('open', !!open);
+  el.setAttribute('aria-hidden', open ? 'false' : 'true');
+  if(open){
+    const body = document.getElementById('playbook-drawer-body');
+    if(body) body.innerHTML = buildPlaybookDrawerHTML();
+    // wire drawer actions
+    body?.querySelectorAll('[data-pb-jump]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        setPlaybookDrawerOpen(false);
+        renderView(btn.getAttribute('data-pb-jump'));
+      });
+    });
+    body?.querySelectorAll('[data-pb-open-cap]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        setPlaybookDrawerOpen(false);
+        renderView('capabilities', btn.getAttribute('data-pb-open-cap'));
+      });
+    });
+  }
+}
+
+function togglePlaybookDrawer(){
+  const el = document.getElementById('playbook-drawer');
+  const open = !el?.classList.contains('open');
+  setPlaybookDrawerOpen(open);
+}
+
+function renderView(viewKey, extra) {
     currentView = viewKey;
     currentSelectedId = extra || null;
     setHeader(viewKey);
@@ -5652,7 +5914,9 @@ Not mapped yet`);
       case 'metrics':
         renderMetrics();
         break;
-      default:
+      
+      case 'playbook': renderPlaybook(); break;
+default:
         renderOverview();
     }
   }
@@ -5664,6 +5928,27 @@ Not mapped yet`);
       const view = btn.dataset.view;
       renderView(view);
     });
+  });
+
+
+  // ---------- Playbook drawer wiring ------------------
+  document.getElementById('playbook-toggle')?.addEventListener('click', togglePlaybookDrawer);
+  document.getElementById('playbook-close')?.addEventListener('click', ()=>setPlaybookDrawerOpen(false));
+  document.getElementById('playbook-open-full')?.addEventListener('click', ()=>{
+    setPlaybookDrawerOpen(false);
+    renderView('playbook');
+  });
+  document.getElementById('playbook-copy-weekly')?.addEventListener('click', ()=>{
+    navigator.clipboard?.writeText(getWeeklyUpdateText());
+    toast('Copied weekly update');
+  });
+
+  document.addEventListener('keydown', (e)=>{
+    // Shift+P toggles the reference panel (avoids conflicting with / search)
+    if(e.shiftKey && (e.key === 'P' || e.key === 'p')){
+      e.preventDefault();
+      togglePlaybookDrawer();
+    }
   });
 
   
@@ -5785,6 +6070,26 @@ renderView('overview');
       <div class="modal-actions" id="modal-actions"></div>
     </div>
   </div>
+
+
+<div id="playbook-drawer" class="playbook-drawer" aria-hidden="true">
+  <div class="playbook-drawer-inner">
+    <div class="playbook-drawer-header">
+      <div>
+        <div class="playbook-drawer-title">InfoSec Program Playbook</div>
+        <div class="playbook-drawer-sub">Reference panel (links into live work)</div>
+      </div>
+      <button id="playbook-close" class="mini-btn" type="button">Close</button>
+    </div>
+
+    <div class="playbook-drawer-body" id="playbook-drawer-body"></div>
+
+    <div class="playbook-drawer-footer">
+      <button class="mini-btn" type="button" id="playbook-open-full">Open full Playbook view</button>
+      <button class="mini-btn" type="button" id="playbook-copy-weekly">Copy Weekly Update</button>
+    </div>
+  </div>
+</div>
 
 </body>
 </html>
